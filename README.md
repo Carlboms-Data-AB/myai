@@ -1,5 +1,3 @@
-# local-ai-mac-mini
-
 # Local Coding Agent on Apple Silicon
 
 This guide sets up a fully local coding agent on an Apple Silicon Mac using:
