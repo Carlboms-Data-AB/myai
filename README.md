@@ -1,13 +1,36 @@
 # Local AI Mac mini
 
-A menu-driven local coding-agent setup for Apple Silicon Macs.
+A self-contained local coding agent for Apple Silicon Macs.
+
+This repository combines OpenCode, mlx-serve, Qwen and Apple MLX into a local coding environment that can work directly inside your repositories.
+
+It can inspect and edit files, run shell commands, build projects, run tests and work with Git. Optional web search and browser automation can be enabled when external access is useful.
+
+The included `local-ai` command handles installation, configuration, background services, diagnostics and daily use.
+
+## What it does
+
+- runs Qwen locally on Apple Silicon with MLX
+- uses OpenCode as the coding-agent interface
+- gives the agent access to repositories, files, shell commands, builds, tests and Git
+- starts `mlx-serve` automatically in the background with `launchd`
+- keeps the local model API bound to `127.0.0.1`
+- keeps this stack's OpenCode configuration separate from your normal OpenCode config
+- supports optional web search and web fetching
+- supports optional browser automation with ego lite
+- provides one `local-ai` command for setup, configuration, status, testing, restart and daily use
+
+## Architecture
 
 ```text
 OpenCode
    │
-   ├── repository, shell, Git, builds and tests
-   ├── websearch / webfetch (optional external web access)
-   └── ego-browser (optional browser automation)
+   ├── repository and file access
+   ├── shell commands
+   ├── builds and tests
+   ├── Git
+   ├── optional websearch / webfetch
+   └── optional ego-browser automation
    │
    ▼
 mlx-serve
@@ -19,48 +42,31 @@ Qwen3.5 9B 6-bit
 Apple MLX / Metal
 ```
 
-The model runs locally. `mlx-serve` listens only on `127.0.0.1`.
+The language model runs locally. `mlx-serve` listens only on `127.0.0.1`.
 
-## Install
+## Features
 
-Requirements:
+- local Qwen inference using Apple MLX
+- agentic coding through OpenCode
+- automatic `mlx-serve` startup with `launchd`
+- menu-driven setup and configuration
+- isolated OpenCode configuration
+- configurable model, context size and output-token limit
+- optional idle model eviction
+- optional web search and web fetching
+- optional ego lite browser automation
+- built-in status, testing, restart and uninstall
 
-- Apple Silicon Mac
-- Homebrew
-- macOS compatible with the current `mlx-serve` release
+## Usage
 
-Clone this private repository using your normal GitHub authentication, then run:
-
-```bash
-git clone git@github.com:Carlboms-Data-AB/local-ai-mac-mini.git
-cd local-ai-mac-mini
-./setup.sh
-```
-
-The installer opens a menu. Choose **Install / update**.
-
-It installs or configures:
-
-- `mlx-serve`
-- OpenCode
-- `mlx-community/Qwen3.5-9B-6bit`
-- a private OpenCode configuration for this stack
-- a `launchd` service for `mlx-serve`
-- the `local-ai` management command
-
-After installation:
+For normal use, open a repository and start `local-ai`:
 
 ```bash
+cd ~/source/repos/my-project
 local-ai
 ```
 
-If the command is not visible in the shell that ran the installer yet:
-
-```bash
-source ~/.zshrc
-```
-
-## Menu
+The menu is:
 
 ```text
 ┌──────────────────────────────────┐
@@ -78,19 +84,24 @@ source ~/.zshrc
  8  Quit
 ```
 
-Normal use is simply:
-
-```bash
-cd ~/source/repos/my-project
-local-ai
-```
-
 Choose **Launch OpenCode**. OpenCode starts in the current directory.
 
 You can also launch it directly:
 
 ```bash
 local-ai opencode
+```
+
+Quick status:
+
+```bash
+local-ai status
+```
+
+Run the built-in checks:
+
+```bash
+local-ai test
 ```
 
 ## Configuration
@@ -103,13 +114,13 @@ The managed configuration lives in:
 └── opencode.json
 ```
 
-`local-ai` deliberately uses `OPENCODE_CONFIG` and a matching runtime override instead of replacing your normal:
+`local-ai` uses `OPENCODE_CONFIG` and a matching runtime override instead of replacing your normal:
 
 ```text
 ~/.config/opencode/opencode.json
 ```
 
-Existing OpenCode providers and personal configuration are therefore left alone. The managed config is also applied at runtime and allowlists only the local `mlx` provider, so OpenCode launched through `local-ai` cannot silently switch to a cloud LLM even when a project contains its own OpenCode config.
+Existing OpenCode providers and personal configuration are therefore left alone. OpenCode launched through `local-ai` allowlists only the local `mlx` provider, so it cannot silently switch to a cloud LLM because of another OpenCode configuration.
 
 The Configure menu can change:
 
@@ -132,6 +143,45 @@ Web tools:      enabled
 Idle eviction:  off
 ```
 
+## Install
+
+Requirements:
+
+- Apple Silicon Mac
+- Homebrew
+- macOS compatible with the current `mlx-serve` release
+
+Clone the repository and run the setup script:
+
+```bash
+git clone https://github.com/Carlboms-Data-AB/local-ai-mac-mini.git
+cd local-ai-mac-mini
+./setup.sh
+```
+
+The installer opens the menu. Choose **Install / update**.
+
+It installs or configures:
+
+- `mlx-serve`
+- OpenCode
+- `mlx-community/Qwen3.5-9B-6bit`
+- a dedicated OpenCode configuration for this stack
+- a `launchd` service for `mlx-serve`
+- the `local-ai` management command
+
+After installation:
+
+```bash
+local-ai
+```
+
+If the command is not visible in the shell that ran the installer yet:
+
+```bash
+source ~/.zshrc
+```
+
 ## Background service
 
 The installer creates its own LaunchAgent:
@@ -150,7 +200,7 @@ mlx-serve \
   --port 11234
 ```
 
-The model is loaded on demand. If idle eviction is enabled in **Configure**, the model is also unloaded after the configured idle period.
+The model is loaded on demand. If idle eviction is enabled in **Configure**, the model is unloaded after the configured idle period.
 
 This is a per-user LaunchAgent. It starts automatically when that macOS user session is logged in; it is not a pre-login system daemon.
 
@@ -161,23 +211,6 @@ Logs are stored in:
 ```text
 ~/.local/state/local-ai-mac-mini/
 ```
-
-
-## Migrating from the earlier manual setup
-
-The managed installer intentionally uses different paths from the earlier manual setup:
-
-```text
-Managed LaunchAgent:
-~/Library/LaunchAgents/se.carlbomsdata.local-ai-mlx-serve.plist
-
-Managed OpenCode config:
-~/.config/local-ai-mac-mini/opencode.json
-```
-
-If the older `se.carlbomsdata.mlx-serve` LaunchAgent is loaded, the installer stops it before starting the managed service. It leaves the old plist and the normal global OpenCode config untouched so they can be removed only after the new stack has been tested.
-
-A manually started `mlx-serve` process on the configured port is also detected; in an interactive install, the setup offers to stop it.
 
 ## Web search
 
@@ -218,9 +251,7 @@ The setup installs the `ego-browser` skill with:
 npx skills add citrolabs/ego-lite
 ```
 
-ego lite also requires its macOS application and one-time GUI onboarding. The first browser task can guide you through that part.
-
-The browser integration is intentionally opt-in because it can use real browser state and authenticated sessions.
+ego lite also requires its macOS application and one-time GUI onboarding. The browser integration is intentionally opt-in because it can use real browser state and authenticated sessions.
 
 ## Test
 
@@ -241,21 +272,6 @@ The test checks:
 - a small local inference request
 - web/ego configuration
 
-
-## Status
-
-For a quick status screen:
-
-```bash
-local-ai status
-```
-
-For the interactive menu:
-
-```bash
-local-ai
-```
-
 ## Update
 
 To apply a newer version of this repository:
@@ -268,9 +284,7 @@ git pull
 
 Choose **Install / update**. The updated script is copied into the installed `local-ai` command.
 
-The installer is idempotent. Existing downloaded models and already installed programs are reused.
-
-The local configuration is kept in a separate file so replacing `setup.sh` does not reset your choices.
+The installer is idempotent. Existing downloaded models and already installed programs are reused. The local configuration is kept separately so replacing `setup.sh` does not reset your choices.
 
 ## Uninstall
 
@@ -298,12 +312,28 @@ It deliberately keeps:
 
 Those may be shared with other workflows and are not removed automatically.
 
+## Migrating from an earlier manual setup
+
+The managed installer uses different paths from an earlier manual setup:
+
+```text
+Managed LaunchAgent:
+~/Library/LaunchAgents/se.carlbomsdata.local-ai-mlx-serve.plist
+
+Managed OpenCode config:
+~/.config/local-ai-mac-mini/opencode.json
+```
+
+If the older `se.carlbomsdata.mlx-serve` LaunchAgent is loaded, the installer stops it before starting the managed service. It leaves the old plist and normal global OpenCode config untouched so they can be removed only after the new stack has been tested.
+
+A manually started `mlx-serve` process on the configured port is also detected. In an interactive install, the setup offers to stop it.
+
 ## Files
 
 | File | Role |
 |---|---|
 | `setup.sh` | installer, configuration UI and local management command |
-| `README.md` | installation and usage |
+| `README.md` | project overview, installation and usage |
 | `.gitattributes` | cross-platform line-ending policy |
 | `.gitignore` | repository-local ignore rules |
 
