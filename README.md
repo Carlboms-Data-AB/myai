@@ -4,21 +4,25 @@ MyAI is a local coding agent stack. It runs a language model on your own
 machine, points OpenCode at it, and keeps the whole thing alive as a
 background service you can reach from a browser on another computer.
 
-Nothing about a coding session leaves the machine unless you switch on the
-optional web tools. There is no cloud provider in the loop, and the OpenCode
-configuration MyAI manages allows only the local model, so a session cannot
-quietly fall back to a hosted LLM.
+The model itself never leaves your machine. There is no cloud provider in the
+loop, and the OpenCode configuration MyAI manages allows only the local model,
+so a session cannot quietly fall back to a hosted LLM.
+
+Web search and web fetching are off by default, so out of the box nothing at
+all leaves the machine. Turning them on under **Configure** keeps inference
+local but sends search queries to Exa and lets fetches reach the site being
+requested.
 
 The `myai` command handles installation, models, configuration, background
 services, diagnostics and daily use. It runs natively on macOS, Windows and
-Linux. On Windows it is genuinely native: no WSL, anywhere.
+Linux, including Windows ARM64. It never uses WSL.
 
 ## What it does
 
 - runs a language model locally, on Apple Silicon through MLX and on Windows
   and Linux through llama.cpp
-- gives OpenCode access to your repositories, files, shell, builds, tests and
-  Git
+- runs OpenCode in the directory you start it in, where it can read and edit
+  files, run shell commands, builds and tests, and use Git
 - serves the OpenCode Web interface as a background service so you can work
   from a browser on another machine
 - keeps the model loaded in memory, or unloads it after an idle period, as you
@@ -35,7 +39,7 @@ Browser on another machine
           ▼
    OpenCode Web  :4096
           │
-          ├── repository and file access
+          ├── files in the working directory
           ├── shell commands
           ├── builds and tests
           ├── Git
@@ -66,8 +70,9 @@ platform actually needs:
 | Qwen3.5 9B | `mlx-community/Qwen3.5-9B-6bit` | `unsloth/Qwen3.5-9B-GGUF` → `Qwen3.5-9B-Q6_K.gguf` |
 | Qwen3.5 9B Compact | `mlx-community/Qwen3.5-9B-4bit` | `unsloth/Qwen3.5-9B-GGUF` → `Qwen3.5-9B-Q4_K_M.gguf` |
 
-MLX and GGUF never appear in the interface. They are an implementation detail
-of the platform you happen to be on.
+You never have to choose between MLX and GGUF, or know which one your machine
+needs. MyAI picks the artifact that matches the backend it will actually be
+loaded by, and shows you the name it settled on.
 
 ## Features
 
@@ -81,8 +86,8 @@ of the platform you happen to be on.
 - isolated OpenCode configuration that allows only the local provider
 - generated password for remote Web UI access
 - configurable context size, output limit, ports and bind addresses
-- optional web search and web fetching
-- optional ego lite browser automation
+- optional web search and web fetching, off by default
+- optional ego lite browser automation, off by default
 - real diagnostics, including an actual inference request
 - uninstall that keeps your downloaded models unless you say otherwise
 
@@ -119,7 +124,7 @@ Choose **OpenCode** to start the terminal interface in the current directory.
 Everything in the menu is also a command:
 
 ```bash
-myai status             # what is installed, running and loaded
+myai status             # what is installed and running
 myai test               # run the built-in checks
 myai web                # Web UI address, username and password
 myai opencode           # launch OpenCode here
@@ -173,8 +178,10 @@ free disk space before starting a download. Interrupted downloads resume.
 Deleting the model that is currently active has to be confirmed explicitly,
 because it leaves nothing for the backend to serve.
 
-You can also give a model reference directly, in the form `org/repo`,
-`org/repo:QUANT` or `org/repo/file.gguf`, for models outside the catalog.
+You can also give a model reference directly, for models outside the catalog:
+`org/repo` for MLX, and `org/repo:QUANT` or `org/repo/file.gguf` for GGUF. A
+quantization label such as `:Q5_K_M` is looked up in the repository and
+resolved to the matching file.
 
 Models are stored in the place the backend expects:
 
@@ -206,13 +213,55 @@ then resolves the active model to the GGUF artifact rather than the MLX one.
 
 ## Installation
 
-Download the binary for your platform from the releases page, then:
+Every release ships a single binary with no runtime dependencies. Pick the one
+for your machine from the
+[releases page](https://github.com/Carlboms-Data-AB/myai/releases), or use the
+commands below.
+
+**macOS, Apple Silicon**
+
+```bash
+curl -fsSL -o myai https://github.com/Carlboms-Data-AB/myai/releases/latest/download/myai-darwin-arm64
+chmod +x myai
+xattr -d com.apple.quarantine myai 2>/dev/null
+./myai status
+```
+
+The `xattr` line clears the quarantine flag macOS puts on anything downloaded
+with a browser or curl. Without it, Gatekeeper refuses to run an unsigned
+binary.
+
+**Linux**
+
+```bash
+curl -fsSL -o myai https://github.com/Carlboms-Data-AB/myai/releases/latest/download/myai-linux-amd64
+chmod +x myai
+./myai status
+```
+
+Use `myai-linux-arm64` on ARM machines.
+
+**Windows**, in PowerShell:
+
+```powershell
+curl.exe -fsSL -o myai.exe https://github.com/Carlboms-Data-AB/myai/releases/latest/download/myai-windows-amd64.exe
+.\myai.exe status
+```
+
+Use `myai-windows-arm64.exe` on ARM machines. Installing the services needs an
+elevated prompt, because that is what registering a Windows service requires.
+
+Running `status` first is worth the ten seconds. It changes nothing, writes no
+files and tells you what the machine already has, so you can see what an
+install is about to do.
+
+Then:
 
 ```bash
 ./myai install
 ```
 
-Or build from source, which needs Go 1.23 or newer:
+To build from source instead, which needs Go 1.23 or newer:
 
 ```bash
 git clone https://github.com/Carlboms-Data-AB/myai.git
@@ -231,8 +280,8 @@ To update later without touching models:
 myai upgrade
 ```
 
-Upgrading from the earlier `local-ai` Bash version happens automatically on
-first run. MyAI imports the model, ports, limits and tool settings, keeps the
+Upgrading from the earlier `local-ai` Bash version happens automatically the
+first time you install. MyAI imports the model, ports, limits and tool settings, keeps the
 existing Web UI password so saved logins still work, stops the old
 LaunchAgents so they do not hold the ports, and leaves every downloaded model
 exactly where it is.
@@ -268,13 +317,14 @@ port = 4096
 username = "opencode"
 
 [tools]
-web_search = true
+web_search = false
 browser_automation = false
 ```
 
-Everything here is reachable from the **Runtime** and **Configure** menus. A
-change is written, the OpenCode configuration is regenerated and the services
-restart, in that order.
+The **Runtime** and **Configure** menus cover everything you would normally
+change; `inference.host` and `web.username` are file-only. A change is
+written, the OpenCode configuration is regenerated and the services restart,
+in that order.
 
 ### Keeping the model in RAM
 
@@ -345,18 +395,20 @@ adds no web frontend of its own.
 
 ### Web search and browser automation
 
-Web tools are on by default. When they are, MyAI sets `OPENCODE_ENABLE_EXA=1`
-and allows the `websearch` and `webfetch` tools. Inference stays local, but
-searches go to Exa and fetches reach the site being requested. Turn them off
-in **Configure**.
+Web search is off by default. Turning it on in **Configure** sets
+`OPENCODE_ENABLE_EXA=1` and allows the `websearch` and `webfetch` tools.
+Inference stays local either way, but searches then go to Exa and fetches
+reach the site being requested.
 
 Browser automation is off by default and installs the `ego-browser` skill when
-you enable it. It is opt-in because it drives a real browser with real
-signed-in sessions.
+you enable it. It needs Node.js, and ego lite additionally needs its own macOS
+application and a one-time setup in that application. It is opt-in because it
+drives a real browser with real signed-in sessions.
 
 ## Security
 
-- the inference API binds to `127.0.0.1` and is never exposed to the network
+- the inference API binds to `127.0.0.1`, and nothing in the interface changes
+  that
 - OpenCode Web refuses to start without a password when it is bound beyond
   loopback
 - the Web UI password is generated with 18 bytes of cryptographic randomness
