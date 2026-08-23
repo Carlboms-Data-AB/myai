@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -105,6 +106,17 @@ func (a *App) Test(ctx context.Context) TestReport {
 		add("model inference", ok, detail)
 	} else {
 		skip("model inference", "the inference API is not answering")
+	}
+
+	if apiUp && modelErr == nil {
+		if served, ok := client.ContextLength(ctx, b.ModelName(model)); ok {
+			detail := fmt.Sprintf("%d tokens, and OpenCode is told %d", served, a.cfg.Inference.Context)
+			add("context window", served >= a.cfg.Inference.Context, detail)
+		} else {
+			skip("context window", "the server does not report a context window")
+		}
+	} else {
+		skip("context window", "the inference API is not answering")
 	}
 
 	ocInfo := a.oc.Detect(ctx)

@@ -200,3 +200,90 @@ func (c *Client) Warm(ctx context.Context, model string) error {
 	_, err := c.Complete(ctx, model, "hi", 1)
 	return err
 }
+
+// contextKeys are the field names servers use for a model's context window.
+// Different OpenAI-compatible servers name it differently, and some do not
+// report it at all.
+var contextKeys = []string{
+	"context_length",
+	"max_context_length",
+	"context_window",
+	"max_model_len",
+	"n_ctx",
+}
+
+// ContextLength reports the context window the server advertises for a model,
+// and whether it said anything at all. MyAI tells OpenCode how much context a
+// model has, so it is worth knowing when the server disagrees.
+func (c *Client) ContextLength(ctx context.Context, model string) (int, bool) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/v1/models", nil)
+	if err != nil {
+		return 0, false
+	}
+	resp, err := c.http().Do(req)
+	if err != nil {
+		return 0, false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 0, false
+	}
+
+	var parsed struct {
+		Data []map[string]any `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return 0, false
+	}
+
+	want := strings.ToLower(model)
+	for _, entry := range parsed.Data {
+		id, _ := entry["id"].(string)
+		if len(parsed.Data) > 1 && !strings.EqualFold(id, model) && !strings.Contains(strings.ToLower(id), want) {
+			continue
+		}
+		if n, ok := findContext(entry); ok {
+			return n, true
+		}
+	}
+	return 0, false
+}
+
+// findContext looks for a context window in a model entry, including one
+// nested a level down.
+func findContext(entry map[string]any) (int, bool) {
+	for _, key := range contextKeys {
+		if v, ok := entry[key]; ok {
+			if n, ok := toInt(v); ok && n > 0 {
+				return n, true
+			}
+		}
+	}
+	for _, v := range entry {
+		nested, ok := v.(map[string]any)
+		if !ok {
+			continue
+		}
+		for _, key := range contextKeys {
+			if raw, ok := nested[key]; ok {
+				if n, ok := toInt(raw); ok && n > 0 {
+					return n, true
+				}
+			}
+		}
+	}
+	return 0, false
+}
+
+func toInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case float64:
+		return int(n), true
+	case int:
+		return n, true
+	case json.Number:
+		i, err := n.Int64()
+		return int(i), err == nil
+	}
+	return 0, false
+}
