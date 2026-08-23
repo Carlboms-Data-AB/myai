@@ -304,7 +304,7 @@ host = "127.0.0.1"
 port = 11234
 context = 131072
 output = 16384
-keep_in_ram = true
+keep_in_ram = false
 idle_unload_minutes = 0
 
 [runtime]
@@ -328,11 +328,12 @@ in that order.
 
 ### Keeping the model in RAM
 
-`keep_in_ram = true` is the default. The model is warmed when the backend
-starts and stays resident, so the first request of the day is as fast as the
-rest.
+`keep_in_ram` is off by default: the model loads on first use and MyAI does
+not hold several gigabytes of memory just because it is installed. Turn it on
+under **Runtime** and the model is warmed when the backend starts and stays
+resident, so the first request of the day is as fast as the rest.
 
-Turning it off enables `idle_unload_minutes`. What that does depends on the
+With it off, `idle_unload_minutes` applies. What that does depends on the
 backend, and MyAI is explicit about the difference:
 
 - **mlx-serve** unloads idle models natively, through `--idle-evict-secs`.

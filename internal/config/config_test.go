@@ -33,10 +33,10 @@ func TestDefaultMatchesPrototypeBehaviour(t *testing.T) {
 	if d.Tools.WebSearch || d.Tools.BrowserAutomation {
 		t.Errorf("tool defaults = %+v, want both off", d.Tools)
 	}
-	// mlx-serve warms eagerly at boot and the prototype never passed
-	// --idle-evict-secs, so the model stayed resident. Keep that.
-	if !d.Inference.KeepInRAM || d.Inference.IdleUnloadMinutes != 0 {
-		t.Errorf("lifecycle defaults = %+v", d.Inference)
+	// Holding gigabytes of memory is opt-in, and nothing is evicted on a
+	// timer unless asked for either.
+	if d.Inference.KeepInRAM || d.Inference.IdleUnloadMinutes != 0 {
+		t.Errorf("lifecycle defaults = %+v, want load on demand", d.Inference)
 	}
 	if err := d.Validate(); err != nil {
 		t.Fatalf("defaults do not validate: %v", err)
@@ -57,8 +57,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	want := Default()
 	want.ActiveModel = "qwen3.5-9b-compact"
-	want.Inference.KeepInRAM = false
-	want.Inference.IdleUnloadMinutes = 20
+	want.Inference.KeepInRAM = true
 	want.Web.Port = 4444
 	want.Tools.BrowserAutomation = true
 	want.Runtime.Acceleration = AccelerationVulkan
@@ -125,7 +124,6 @@ func TestKeepInRAMDisablesIdleUnload(t *testing.T) {
 
 func TestIdleUnloadSeconds(t *testing.T) {
 	cfg := Default()
-	cfg.Inference.KeepInRAM = false
 	cfg.Inference.IdleUnloadMinutes = 15
 	if got := cfg.IdleUnloadSeconds(); got != 900 {
 		t.Errorf("IdleUnloadSeconds = %d, want 900", got)
@@ -144,7 +142,7 @@ func TestValidateRejectsBadConfigurations(t *testing.T) {
 		{"unknown acceleration", func(c *Config) { c.Runtime.Acceleration = "tpu" }},
 		{"context too small", func(c *Config) { c.Inference.Context = 128 }},
 		{"output exceeds context", func(c *Config) { c.Inference.Output = 200000; c.Inference.Context = 131072 }},
-		{"idle unload too long", func(c *Config) { c.Inference.KeepInRAM = false; c.Inference.IdleUnloadMinutes = 5000 }},
+		{"idle unload too long", func(c *Config) { c.Inference.IdleUnloadMinutes = 5000 }},
 		{"empty username", func(c *Config) { c.Web.Username = "" }},
 		{"empty model", func(c *Config) { c.ActiveModel = "" }},
 	}

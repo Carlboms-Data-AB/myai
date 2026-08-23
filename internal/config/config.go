@@ -78,9 +78,9 @@ type Inference struct {
 	// Output caps generated tokens per response.
 	Output int `toml:"output"`
 	// KeepInRAM warms the active model when the backend starts and keeps it
-	// resident. Idle unloading is disabled while this is true. This is the
-	// default because it is what the macOS prototype effectively did:
-	// mlx-serve warms eagerly at boot unless told not to.
+	// resident. Idle unloading is disabled while this is true. It is off by
+	// default: holding several gigabytes indefinitely should be something you
+	// ask for, not something that happens because you installed MyAI.
 	KeepInRAM bool `toml:"keep_in_ram"`
 	// IdleUnloadMinutes unloads the model after this many idle minutes.
 	// Zero means never unload. Ignored when KeepInRAM is true.
@@ -120,7 +120,7 @@ func Default() Config {
 			Port:              11234,
 			Context:           131072,
 			Output:            16384,
-			KeepInRAM:         true,
+			KeepInRAM:         false,
 			IdleUnloadMinutes: 0,
 		},
 		Runtime: Runtime{
