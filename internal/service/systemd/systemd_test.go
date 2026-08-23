@@ -198,7 +198,18 @@ func TestUnitPassesSystemdAnalyze(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	body, err := Unit(sampleSpec(dir))
+	spec := sampleSpec(dir)
+	// systemd-analyze checks that ExecStart names a real executable, so point
+	// it at one. The unit's syntax is what this test is for.
+	spec.Exec = filepath.Join(dir, "opencode")
+	if err := os.WriteFile(spec.Exec, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "logs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	body, err := Unit(spec)
 	if err != nil {
 		t.Fatal(err)
 	}
