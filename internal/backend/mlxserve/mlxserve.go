@@ -1,0 +1,163 @@
+// Package mlxserve runs models on Apple Silicon through mlx-serve, which
+// serves MLX checkpoints over an OpenAI-compatible API using Metal.
+package mlxserve
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/Carlboms-Data-AB/myai/internal/backend"
+	"github.com/Carlboms-Data-AB/myai/internal/catalog"
+	"github.com/Carlboms-Data-AB/myai/internal/config"
+	"github.com/Carlboms-Data-AB/myai/internal/models"
+	"github.com/Carlboms-Data-AB/myai/internal/progress"
+	"github.com/Carlboms-Data-AB/myai/internal/run"
+	"github.com/Carlboms-Data-AB/myai/internal/service"
+)
+
+// Executable is the mlx-serve command name.
+const Executable = "mlx-serve"
+
+// Backend runs mlx-serve.
+type Backend struct {
+	// ModelDir is the shared mlx-serve model store.
+	ModelDir string
+	// Runner executes mlx-serve and Homebrew.
+	Runner run.Runner
+	// GOOS and GOARCH identify the platform.
+	GOOS, GOARCH string
+}
+
+// New returns an mlx-serve backend.
+func New(modelDir string, runner run.Runner, goos, goarch string) *Backend {
+	return &Backend{ModelDir: modelDir, Runner: runner, GOOS: goos, GOARCH: goarch}
+}
+
+// ID returns the backend identifier.
+func (b *Backend) ID() string { return config.BackendMLXServe }
+
+// Name returns the display name.
+func (b *Backend) Name() string { return "mlx-serve" }
+
+// Detect reports whether mlx-serve is installed.
+func (b *Backend) Detect(ctx context.Context) backend.Info {
+	info := backend.Info{ID: b.ID(), Name: b.Name()}
+
+	path, err := b.Runner.Look(Executable)
+	if err != nil {
+		return info
+	}
+	info.Installed = true
+	info.Path = path
+
+	if res, err := b.Runner.Run(ctx, run.Spec{Name: Executable, Args: []string{"--version"}}); err == nil {
+		info.Version = firstLine(res.Output)
+	}
+	return info
+}
+
+// Install adds mlx-serve through Homebrew, which is how its author
+// distributes it for macOS.
+func (b *Backend) Install(ctx context.Context, _ config.Config, rep progress.Reporter) error {
+	reporter := progress.Or(rep)
+
+	if b.Detect(ctx).Installed {
+		reporter.Info("mlx-serve is already installed")
+		return nil
+	}
+	if !run.Available(b.Runner, "brew") {
+		return fmt.Errorf("Homebrew is required to install mlx-serve: see https://brew.sh")
+	}
+
+	reporter.Step("Installing mlx-serve")
+	if _, err := b.Runner.Run(ctx, run.Spec{
+		Name:   "brew",
+		Args:   []string{"tap", "ddalcu/mlx-serve", "https://github.com/ddalcu/mlx-serve"},
+		OnLine: reporter.Info,
+	}); err != nil {
+		return fmt.Errorf("add the mlx-serve tap: %w", err)
+	}
+
+	// Newer Homebrew releases require third-party formulae to be trusted
+	// before they will run. Older ones have no such subcommand, so a failure
+	// here is not fatal.
+	if run.Quiet(ctx, b.Runner, "brew", "help", "trust") {
+		_, _ = b.Runner.Run(ctx, run.Spec{Name: "brew", Args: []string{"trust", "--formula", "ddalcu/mlx-serve/mlx-serve"}})
+	}
+
+	if _, err := b.Runner.Run(ctx, run.Spec{
+		Name:   "brew",
+		Args:   []string{"install", "ddalcu/mlx-serve/mlx-serve"},
+		OnLine: reporter.Info,
+	}); err != nil {
+		return fmt.Errorf("install mlx-serve: %w", err)
+	}
+	return nil
+}
+
+// Store returns the shared mlx-serve model store.
+func (b *Backend) Store() models.Store {
+	return models.NewMLXStore(b.ModelDir, Executable, b.Runner, b.GOOS, b.GOARCH)
+}
+
+// BaseURL returns the inference API root.
+func (b *Backend) BaseURL(cfg config.Config) string { return backend.BaseURL(cfg) }
+
+// ModelName returns the identifier mlx-serve advertises, which is the
+// repository id of the checkpoint.
+func (b *Backend) ModelName(r catalog.Resolved) string { return r.Artifact.Repo }
+
+// ServiceSpec describes the mlx-serve background service.
+//
+// Model lifecycle maps onto mlx-serve's own flags: it warms models eagerly at
+// boot unless told otherwise, so keeping a model in RAM means leaving that
+// alone and never passing an idle-eviction window.
+func (b *Backend) ServiceSpec(ctx context.Context, p backend.SpecParams) (service.Spec, error) {
+	info := b.Detect(ctx)
+	if !info.Installed {
+		return service.Spec{}, fmt.Errorf("mlx-serve is not installed")
+	}
+
+	args := []string{
+		"--serve",
+		"--model-dir", b.ModelDir,
+		"--host", p.Config.Inference.Host,
+		"--port", strconv.Itoa(p.Config.Inference.Port),
+	}
+	if p.Config.Inference.KeepInRAM {
+		// Eager warmup is the default, so there is nothing to add. Make sure
+		// the model is allowed to stay resident.
+		args = append(args, "--max-resident-models", "1")
+	} else {
+		args = append(args, "--no-warmup-eager")
+		if seconds := p.Config.IdleUnloadSeconds(); seconds > 0 {
+			args = append(args, "--idle-evict-secs", strconv.Itoa(seconds))
+		}
+	}
+
+	return service.Spec{
+		Role:        service.RoleInference,
+		Name:        p.Name,
+		DisplayName: service.DisplayName(service.RoleInference),
+		Description: service.Description(service.RoleInference),
+		Exec:        info.Path,
+		Args:        args,
+		Env:         map[string]string{"MYAI_ROLE": service.RoleInference},
+		Dir:         p.WorkDir,
+		StdoutLog:   p.StdoutLog,
+		StderrLog:   p.StderrLog,
+		Account:     p.Account,
+	}, nil
+}
+
+// IdleUnload reports mlx-serve's native idle eviction.
+func (b *Backend) IdleUnload(context.Context) backend.IdleUnload {
+	return backend.IdleUnload{Supported: true, Mechanism: "--idle-evict-secs"}
+}
+
+func firstLine(s string) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
+	return strings.TrimSpace(line)
+}

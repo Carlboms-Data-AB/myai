@@ -1,0 +1,56 @@
+{
+  "models": [
+    {
+      "id": "qwen3.5-9b",
+      "name": "Qwen3.5 9B",
+      "summary": "Balanced quality and speed. The default MyAI coding model.",
+      "context": 131072,
+      "output": 16384,
+      "artifacts": [
+        {
+          "os": ["darwin"],
+          "arch": ["arm64"],
+          "backend": "mlx-serve",
+          "repo": "mlx-community/Qwen3.5-9B-6bit",
+          "quant": "6-bit",
+          "size": 8215258652
+        },
+        {
+          "os": ["windows", "linux"],
+          "arch": ["amd64", "arm64"],
+          "backend": "llama.cpp",
+          "repo": "unsloth/Qwen3.5-9B-GGUF",
+          "file": "Qwen3.5-9B-Q6_K.gguf",
+          "quant": "Q6_K",
+          "size": 7458301152
+        }
+      ]
+    },
+    {
+      "id": "qwen3.5-9b-compact",
+      "name": "Qwen3.5 9B Compact",
+      "summary": "Same model at a smaller quantization, for machines with less memory.",
+      "context": 131072,
+      "output": 16384,
+      "artifacts": [
+        {
+          "os": ["darwin"],
+          "arch": ["arm64"],
+          "backend": "mlx-serve",
+          "repo": "mlx-community/Qwen3.5-9B-4bit",
+          "quant": "4-bit",
+          "size": 5977073303
+        },
+        {
+          "os": ["windows", "linux"],
+          "arch": ["amd64", "arm64"],
+          "backend": "llama.cpp",
+          "repo": "unsloth/Qwen3.5-9B-GGUF",
+          "file": "Qwen3.5-9B-Q4_K_M.gguf",
+          "quant": "Q4_K_M",
+          "size": 5680522464
+        }
+      ]
+    }
+  ]
+}
