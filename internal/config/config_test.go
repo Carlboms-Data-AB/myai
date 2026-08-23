@@ -29,8 +29,9 @@ func TestDefaultMatchesPrototypeBehaviour(t *testing.T) {
 	if d.Web.Port != 4096 || d.Web.Host != "0.0.0.0" || d.Web.Username != "opencode" {
 		t.Errorf("web defaults = %+v", d.Web)
 	}
-	if !d.Tools.WebSearch || d.Tools.BrowserAutomation {
-		t.Errorf("tool defaults = %+v", d.Tools)
+	// Both reach outside the machine, so neither is on unless asked for.
+	if d.Tools.WebSearch || d.Tools.BrowserAutomation {
+		t.Errorf("tool defaults = %+v, want both off", d.Tools)
 	}
 	// mlx-serve warms eagerly at boot and the prototype never passed
 	// --idle-evict-secs, so the model stayed resident. Keep that.

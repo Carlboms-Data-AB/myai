@@ -127,7 +127,9 @@ func Default() Config {
 			Username: "opencode",
 		},
 		Tools: Tools{
-			WebSearch:         true,
+			// Off by default: the point of MyAI is that a session stays on
+			// the machine, and web search would send queries to a third party.
+			WebSearch:         false,
 			BrowserAutomation: false,
 		},
 	}
