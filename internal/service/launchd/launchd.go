@@ -150,6 +150,23 @@ func (m *Manager) kickstart(ctx context.Context, name string) error {
 	return err
 }
 
+// restart forces the job to start again, retrying while launchd reports that
+// it is busy with the previous transition.
+func (m *Manager) restart(ctx context.Context, name string) error {
+	var lastErr error
+	for attempt := 0; attempt < loadAttempts; attempt++ {
+		if attempt > 0 {
+			m.sleep(loadInterval)
+		}
+		if err := m.kickstart(ctx, name); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+	}
+	return fmt.Errorf("restart %s: %w", name, lastErr)
+}
+
 // Remove unloads the agent and deletes its plist.
 func (m *Manager) Remove(ctx context.Context, name string) error {
 	m.bootout(ctx, name)
@@ -166,9 +183,12 @@ func (m *Manager) Start(ctx context.Context, name string) error {
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("launch agent %s is not installed", name)
 	}
-	// Bootstrapping an already-loaded agent fails harmlessly, so the kickstart
-	// below is what actually guarantees it is running.
-	return m.load(ctx, name, path)
+	// Loading makes sure launchd knows the job; the kickstart is what
+	// actually restarts it, which is what callers asked for.
+	if err := m.load(ctx, name, path); err != nil {
+		return err
+	}
+	return m.restart(ctx, name)
 }
 
 // Stop unloads the agent. The plist stays on disk so it can be started again.
