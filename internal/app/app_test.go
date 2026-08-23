@@ -2,8 +2,11 @@ package app
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -391,6 +394,59 @@ func TestModelsViewFollowsThePinnedBackend(t *testing.T) {
 	for _, m := range view.Available {
 		if m.Backend != config.BackendLlamaCPP {
 			t.Errorf("offered model %q uses %q", m.ID, m.Backend)
+		}
+	}
+}
+
+func TestStatusNeverAsksTheModelToGenerate(t *testing.T) {
+	// Probing whether a model is resident would itself load it. Reporting
+	// status must not move gigabytes into memory as a side effect.
+	var completions, other int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "chat/completions") {
+			completions++
+			w.Write([]byte(`{"choices":[{"message":{"content":"."}}]}`))
+			return
+		}
+		other++
+		w.Write([]byte(`{"data":[{"id":"mlx-community/Qwen3.5-9B-6bit"}]}`))
+	}))
+	defer srv.Close()
+
+	port, err := strconv.Atoi(strings.TrimPrefix(srv.URL, "http://127.0.0.1:"))
+	if err != nil {
+		t.Skipf("unexpected test server address %q", srv.URL)
+	}
+
+	a, _, _ := newTestApp(t, "darwin", "arm64")
+	if err := a.Update(func(c *config.Config) { c.Inference.Port = port }); err != nil {
+		t.Fatal(err)
+	}
+
+	status := a.Status(context.Background())
+
+	if completions != 0 {
+		t.Errorf("status sent %d completion request(s); it must not load the model", completions)
+	}
+	if !status.APIReachable {
+		t.Errorf("the API should have been reached via a harmless endpoint (%d call(s))", other)
+	}
+}
+
+func TestResidencyIsHonestAboutWhatItKnows(t *testing.T) {
+	tests := []struct {
+		name   string
+		status Status
+		want   string
+	}{
+		{"no model", Status{}, "not installed"},
+		{"api down", Status{ModelInstalled: true}, "unknown, the inference API is not answering"},
+		{"kept resident", Status{ModelInstalled: true, APIReachable: true, KeepInRAM: true}, "kept in RAM"},
+		{"on demand", Status{ModelInstalled: true, APIReachable: true}, "loaded on demand"},
+	}
+	for _, tt := range tests {
+		if got := residency(tt.status); got != tt.want {
+			t.Errorf("%s: residency = %q, want %q", tt.name, got, tt.want)
 		}
 	}
 }

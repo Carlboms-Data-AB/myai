@@ -128,9 +128,14 @@ myai restart            # restart the background services
 ```
 
 `myai status` reports the MyAI and OpenCode versions, the inference backend,
-the active model, whether that model is currently in memory, the keep-in-RAM
-setting, the inference API and service, the OpenCode Web service and address,
-and the web search and browser automation settings.
+the active model and where it stands in memory, the keep-in-RAM setting, the
+inference API and service, the OpenCode Web service and address, and the web
+search and browser automation settings.
+
+Status is read-only. It never sends a request that would load the model, and
+it creates no files, so it is safe to run on a machine where MyAI has not been
+installed. That is also why it reports residency from configuration and
+service state rather than claiming more precision than it can get for free.
 
 `myai test` checks the real thing rather than the presence of files. It
 verifies that the backend is installed, that the service is running, that the

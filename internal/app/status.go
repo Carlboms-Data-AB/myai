@@ -34,8 +34,10 @@ type Status struct {
 	ModelRef string
 	// ModelInstalled reports whether the artifact is downloaded.
 	ModelInstalled bool
-	// ModelLoaded reports whether it currently occupies memory.
-	ModelLoaded bool
+	// ModelResidency describes what the model is doing in memory. Status is
+	// read-only, so this is derived from configuration and service state
+	// rather than from a request that would itself load the model.
+	ModelResidency string
 	// KeepInRAM is the configured residency setting.
 	KeepInRAM bool
 	// IdleUnload describes the configured idle behaviour.
@@ -100,13 +102,7 @@ func (a *App) Status(ctx context.Context) Status {
 
 	client := a.Inference()
 	s.APIReachable = client.Ready(ctx, 2*time.Second)
-	if s.APIReachable && s.ModelInstalled {
-		if model, err := a.ActiveModel(); err == nil {
-			// A resident model answers a one-token request immediately; a model
-			// that has to be read back from disk does not.
-			s.ModelLoaded = client.Loaded(ctx, b.ModelName(model), 3*time.Second)
-		}
-	}
+	s.ModelResidency = residency(s)
 
 	s.InferenceService, _ = a.services.Status(ctx, a.ServiceName(service.RoleInference))
 	if a.cfg.Web.Enabled {
@@ -116,6 +112,22 @@ func (a *App) Status(ctx context.Context) Status {
 	}
 	s.BrowserReady = a.browserReady()
 	return s
+}
+
+// residency describes the model's place in memory without touching it.
+// Asking the server outright would load the model, which is not something
+// reporting status may do.
+func residency(s Status) string {
+	switch {
+	case !s.ModelInstalled:
+		return "not installed"
+	case !s.APIReachable:
+		return "unknown, the inference API is not answering"
+	case s.KeepInRAM:
+		return "kept in RAM"
+	default:
+		return "loaded on demand"
+	}
 }
 
 // idleUnloadSummary describes what will happen to an idle model, using the

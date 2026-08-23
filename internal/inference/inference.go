@@ -200,18 +200,3 @@ func (c *Client) Warm(ctx context.Context, model string) error {
 	_, err := c.Complete(ctx, model, "hi", 1)
 	return err
 }
-
-// Loaded reports whether the active model currently occupies memory. It is
-// answered by asking the server for a single token and measuring how long the
-// reply takes: a resident model answers immediately, a model that has to be
-// read from disk does not.
-func (c *Client) Loaded(ctx context.Context, model string, within time.Duration) bool {
-	ctx, cancel := context.WithTimeout(ctx, within)
-	defer cancel()
-
-	start := time.Now()
-	if _, err := c.Complete(ctx, model, "hi", 1); err != nil {
-		return false
-	}
-	return time.Since(start) < within
-}

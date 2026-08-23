@@ -19,7 +19,7 @@ func renderStatus(c *ui.Console, s app.Status) {
 
 	c.Field("active model", s.Model)
 	c.Field("model files", installedLabel(s.ModelInstalled)+"  "+s.ModelRef)
-	c.Field("model in memory", loadedLabel(s))
+	c.Field("model in memory", s.ModelResidency)
 	c.Field("keep in RAM", ui.YesNo(s.KeepInRAM))
 	c.Field("idle unload", s.IdleUnload)
 	c.Blank()
@@ -45,17 +45,6 @@ func installedLabel(installed bool) string {
 		return "installed  "
 	}
 	return "missing    "
-}
-
-func loadedLabel(s app.Status) string {
-	switch {
-	case !s.APIReachable:
-		return "unknown, the API is not answering"
-	case s.ModelLoaded:
-		return "loaded"
-	default:
-		return "not loaded"
-	}
 }
 
 func reachableLabel(ok bool, address string) string {
