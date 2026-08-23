@@ -69,7 +69,18 @@ func (s *MLXStore) List(ctx context.Context) ([]Installed, error) {
 		if !org.IsDir() {
 			continue
 		}
-		repos, err := os.ReadDir(filepath.Join(s.Root, org.Name()))
+		orgPath := filepath.Join(s.Root, org.Name())
+
+		// mlx-serve lays models out as <root>/<org>/<repo>, but a store
+		// populated another way may hold weights one level up. Missing such a
+		// model would report it as absent and invite a needless multi-gigabyte
+		// download, so check for that case first.
+		if holdsWeights(orgPath) {
+			out = append(out, s.entry(org.Name(), orgPath))
+			continue
+		}
+
+		repos, err := os.ReadDir(orgPath)
 		if err != nil {
 			continue
 		}
@@ -77,26 +88,10 @@ func (s *MLXStore) List(ctx context.Context) ([]Installed, error) {
 			if !repo.IsDir() {
 				continue
 			}
-			path := filepath.Join(s.Root, org.Name(), repo.Name())
-			size, err := dirSize(path)
-			if err != nil {
-				return nil, err
-			}
-			if size == 0 {
-				continue
-			}
-			ref := org.Name() + "/" + repo.Name()
-			name, managed := displayName(ref, s.Target)
-			out = append(out, Installed{
-				Ref:     ref,
-				Name:    name,
-				Path:    path,
-				Size:    size,
-				Backend: s.Backend(),
-				Managed: managed,
-			})
+			out = append(out, s.entry(org.Name()+"/"+repo.Name(), filepath.Join(orgPath, repo.Name())))
 		}
 	}
+	out = withoutEmpty(out)
 	sort.Slice(out, func(i, j int) bool { return out[i].Ref < out[j].Ref })
 	return out, nil
 }
@@ -105,6 +100,49 @@ func (s *MLXStore) List(ctx context.Context) ([]Installed, error) {
 // repository, so there is no file to work out.
 func (s *MLXStore) Prepare(_ context.Context, r catalog.Resolved) (catalog.Resolved, error) {
 	return r, nil
+}
+
+// entry describes one model directory.
+func (s *MLXStore) entry(ref, path string) Installed {
+	size, _ := dirSize(path)
+	name, managed := displayName(ref, s.Target)
+	return Installed{
+		Ref:     ref,
+		Name:    name,
+		Path:    path,
+		Size:    size,
+		Backend: s.Backend(),
+		Managed: managed,
+	}
+}
+
+// holdsWeights reports whether a directory contains model weights directly.
+func holdsWeights(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := strings.ToLower(e.Name())
+		if strings.HasSuffix(name, ".safetensors") || strings.HasSuffix(name, ".gguf") {
+			return true
+		}
+	}
+	return false
+}
+
+// withoutEmpty drops directories that hold nothing.
+func withoutEmpty(in []Installed) []Installed {
+	out := in[:0]
+	for _, m := range in {
+		if m.Size > 0 {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 // Has reports whether the repository directory exists and holds weights.

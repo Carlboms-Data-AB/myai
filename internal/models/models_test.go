@@ -383,3 +383,59 @@ func TestMLXStorePrepareIsAPassThrough(t *testing.T) {
 		t.Errorf("Prepare changed the artifact: %+v", prepared.Artifact)
 	}
 }
+
+func TestMLXStoreFindsAModelStoredWithoutAnOrgDirectory(t *testing.T) {
+	// A store populated by other means may hold weights one level up.
+	// Missing it would report the model as absent and invite a needless
+	// multi-gigabyte download.
+	root := t.TempDir()
+	dir := filepath.Join(root, "Some-Local-Model")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "model.safetensors"), make([]byte, 512), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	store := NewMLXStore(root, "mlx-serve", run.NewFake(), "darwin", "arm64")
+	got, err := store.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d models, want 1: %+v", len(got), got)
+	}
+	if got[0].Ref != "Some-Local-Model" || got[0].Size != 512 {
+		t.Errorf("entry = %+v", got[0])
+	}
+}
+
+func TestMLXStoreStillPrefersTheNestedLayout(t *testing.T) {
+	root := t.TempDir()
+	writeMLXModel(t, root, "mlx-community/Qwen3.5-9B-6bit", 1024)
+
+	store := NewMLXStore(root, "mlx-serve", run.NewFake(), "darwin", "arm64")
+	got, err := store.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Ref != "mlx-community/Qwen3.5-9B-6bit" {
+		t.Errorf("entries = %+v", got)
+	}
+}
+
+func TestMLXStoreIgnoresDirectoriesWithoutWeights(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "empty-org", "empty-repo"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	store := NewMLXStore(root, "mlx-serve", run.NewFake(), "darwin", "arm64")
+	got, err := store.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %+v, want nothing", got)
+	}
+}
