@@ -23,13 +23,18 @@ type GGUFStore struct {
 	Root string
 	// Client downloads files. A nil client uses a default one.
 	Client *hf.Client
-	// GOOS and GOARCH identify the platform for catalog lookups.
-	GOOS, GOARCH string
+	// Target identifies the platform and this store's backend, for catalog
+	// lookups.
+	Target catalog.Target
 }
 
 // NewGGUFStore returns a store rooted at dir.
 func NewGGUFStore(dir, goos, goarch string) *GGUFStore {
-	return &GGUFStore{Root: dir, Client: hf.New(), GOOS: goos, GOARCH: goarch}
+	return &GGUFStore{
+		Root:   dir,
+		Client: hf.New(),
+		Target: catalog.HostTarget(goos, goarch).WithBackend(catalog.BackendLlamaCPP),
+	}
 }
 
 // Backend returns the llama.cpp backend identifier.
@@ -71,7 +76,7 @@ func (s *GGUFStore) List(context.Context) ([]Installed, error) {
 			return nil
 		}
 		ref := filepath.ToSlash(rel)
-		name, managed := displayName(ref, s.GOOS, s.GOARCH)
+		name, managed := displayName(ref, s.Target)
 		out = append(out, Installed{
 			Ref:     ref,
 			Name:    name,

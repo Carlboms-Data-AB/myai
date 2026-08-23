@@ -195,6 +195,10 @@ actually runs, and falls back to the portable CPU build if it does not.
 
 Intel Macs are not supported: MLX needs Apple Silicon.
 
+Each platform picks its backend automatically. You can override that under
+**Runtime**, including running llama.cpp on Apple Silicon instead of MLX; MyAI
+then resolves the active model to the GGUF artifact rather than the MLX one.
+
 ## Installation
 
 Download the binary for your platform from the releases page, then:

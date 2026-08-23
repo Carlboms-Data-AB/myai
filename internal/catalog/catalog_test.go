@@ -1,6 +1,9 @@
 package catalog
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestDefaultModelResolvesPerPlatform(t *testing.T) {
 	tests := []struct {
@@ -17,7 +20,7 @@ func TestDefaultModelResolvesPerPlatform(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.goos+"/"+tt.goarch, func(t *testing.T) {
-			got, err := Resolve("qwen3.5-9b", tt.goos, tt.goarch)
+			got, err := Resolve("qwen3.5-9b", HostTarget(tt.goos, tt.goarch))
 			if err != nil {
 				t.Fatalf("Resolve: %v", err)
 			}
@@ -40,7 +43,7 @@ func TestDefaultModelResolvesPerPlatform(t *testing.T) {
 func TestMacOSResolvesToTheModelAlreadyInstalled(t *testing.T) {
 	// The running Mac has this exact repository downloaded. Resolving to
 	// anything else would trigger a needless multi-gigabyte download.
-	got, err := Resolve("qwen3.5-9b", "darwin", "arm64")
+	got, err := Resolve("qwen3.5-9b", HostTarget("darwin", "arm64"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,14 +56,14 @@ func TestMacOSResolvesToTheModelAlreadyInstalled(t *testing.T) {
 }
 
 func TestCompactModelResolves(t *testing.T) {
-	mac, err := Resolve("qwen3.5-9b-compact", "darwin", "arm64")
+	mac, err := Resolve("qwen3.5-9b-compact", HostTarget("darwin", "arm64"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if mac.Artifact.Repo != "mlx-community/Qwen3.5-9B-4bit" {
 		t.Errorf("mac repo = %q", mac.Artifact.Repo)
 	}
-	win, err := Resolve("qwen3.5-9b-compact", "windows", "amd64")
+	win, err := Resolve("qwen3.5-9b-compact", HostTarget("windows", "amd64"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +77,7 @@ func TestCompactModelResolves(t *testing.T) {
 
 func mustResolve(t *testing.T, id, goos, goarch string) Resolved {
 	t.Helper()
-	r, err := Resolve(id, goos, goarch)
+	r, err := Resolve(id, HostTarget(goos, goarch))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +94,7 @@ func TestEveryCatalogModelCoversEverySupportedPlatform(t *testing.T) {
 	}
 	for _, m := range All() {
 		for _, p := range platforms {
-			if _, ok := m.artifactFor(p[0], p[1]); !ok {
+			if _, ok := m.artifactFor(HostTarget(p[0], p[1])); !ok {
 				t.Errorf("model %q has no artifact for %s/%s", m.ID, p[0], p[1])
 			}
 		}
@@ -99,7 +102,7 @@ func TestEveryCatalogModelCoversEverySupportedPlatform(t *testing.T) {
 }
 
 func TestAvailableListsModelsForPlatform(t *testing.T) {
-	got := Available("darwin", "arm64")
+	got := Available(HostTarget("darwin", "arm64"))
 	if len(got) != len(All()) {
 		t.Fatalf("Available returned %d models, want %d", len(got), len(All()))
 	}
@@ -161,7 +164,7 @@ func TestParseRef(t *testing.T) {
 }
 
 func TestResolveCustomReference(t *testing.T) {
-	got, err := Resolve("mlx-community/Some-Other-Model-6bit", "darwin", "arm64")
+	got, err := Resolve("mlx-community/Some-Other-Model-6bit", HostTarget("darwin", "arm64"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +180,7 @@ func TestResolveCustomReference(t *testing.T) {
 }
 
 func TestResolveRejectsUnknownGarbage(t *testing.T) {
-	if _, err := Resolve("not a model", "linux", "amd64"); err == nil {
+	if _, err := Resolve("not a model", HostTarget("linux", "amd64")); err == nil {
 		t.Error("expected an error for an unparseable reference")
 	}
 }
@@ -189,5 +192,80 @@ func TestRefIncludesFileForGGUF(t *testing.T) {
 	}
 	if r.Label() != "Qwen3.5 9B (Q6_K)" {
 		t.Errorf("Label = %q", r.Label())
+	}
+}
+
+func TestPinnedBackendChoosesAMatchingArtifact(t *testing.T) {
+	// A Mac can run either backend. Resolving without regard for the pinned
+	// one would hand an MLX repository to llama-server.
+	mac := HostTarget("darwin", "arm64")
+
+	auto, err := Resolve("qwen3.5-9b", mac)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if auto.Backend() != BackendMLXServe {
+		t.Errorf("unpinned resolution on Apple Silicon = %q, want MLX", auto.Backend())
+	}
+
+	pinned, err := Resolve("qwen3.5-9b", mac.WithBackend(BackendLlamaCPP))
+	if err != nil {
+		t.Fatalf("pinning llama.cpp on a Mac should resolve: %v", err)
+	}
+	if pinned.Backend() != BackendLlamaCPP {
+		t.Errorf("pinned resolution = %q, want llama.cpp", pinned.Backend())
+	}
+	if pinned.Artifact.File == "" {
+		t.Error("the llama.cpp artifact must name a GGUF file")
+	}
+	if pinned.Artifact.Repo == auto.Artifact.Repo {
+		t.Error("the two backends must not resolve to the same repository")
+	}
+}
+
+func TestPinnedBackendAppliesToEveryPlatform(t *testing.T) {
+	for _, p := range [][2]string{{"windows", "amd64"}, {"linux", "arm64"}, {"darwin", "arm64"}} {
+		target := HostTarget(p[0], p[1]).WithBackend(BackendLlamaCPP)
+		got, err := Resolve("qwen3.5-9b", target)
+		if err != nil {
+			t.Fatalf("%s/%s: %v", p[0], p[1], err)
+		}
+		if got.Backend() != BackendLlamaCPP {
+			t.Errorf("%s/%s resolved to %q", p[0], p[1], got.Backend())
+		}
+	}
+}
+
+func TestPinningMLXOffAppleSiliconFailsClearly(t *testing.T) {
+	// There is no MLX build for Windows, and saying so beats resolving to
+	// something that cannot load.
+	_, err := Resolve("qwen3.5-9b", HostTarget("windows", "amd64").WithBackend(BackendMLXServe))
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), "mlx-serve") {
+		t.Errorf("err = %v, want it to name the backend", err)
+	}
+}
+
+func TestAvailableRespectsThePinnedBackend(t *testing.T) {
+	pinned := Available(HostTarget("darwin", "arm64").WithBackend(BackendLlamaCPP))
+	if len(pinned) == 0 {
+		t.Fatal("llama.cpp on a Mac should still offer models")
+	}
+	for _, r := range pinned {
+		if r.Backend() != BackendLlamaCPP {
+			t.Errorf("model %q resolved to %q", r.Model.ID, r.Backend())
+		}
+	}
+}
+
+func TestCustomReferenceFollowsThePinnedBackend(t *testing.T) {
+	got, err := Resolve("unsloth/Some-GGUF/model.gguf", HostTarget("darwin", "arm64").WithBackend(BackendLlamaCPP))
+	if err != nil {
+		t.Fatalf("a GGUF reference should be accepted when llama.cpp is pinned: %v", err)
+	}
+	if got.Backend() != BackendLlamaCPP || got.Artifact.File != "model.gguf" {
+		t.Errorf("resolved = %+v", got.Artifact)
 	}
 }

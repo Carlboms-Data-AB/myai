@@ -123,9 +123,11 @@ func pruneEmptyParents(path, root string) {
 }
 
 // displayName looks up the catalog name for a reference, falling back to the
-// reference itself for models MyAI does not ship.
-func displayName(ref, goos, goarch string) (string, bool) {
-	for _, r := range catalog.Available(goos, goarch) {
+// reference itself for models MyAI does not ship. The target carries the
+// store's own backend, so a GGUF file is never labelled with an MLX model's
+// name on a platform that could run either.
+func displayName(ref string, target catalog.Target) (string, bool) {
+	for _, r := range catalog.Available(target) {
 		if r.Ref() == ref {
 			return r.Label(), true
 		}

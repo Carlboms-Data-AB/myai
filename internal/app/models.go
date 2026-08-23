@@ -90,7 +90,7 @@ func (a *App) Models(ctx context.Context) (ModelsView, error) {
 		view.DiskUsage += m.Size
 	}
 
-	for _, r := range catalog.Available(a.host.OS, a.host.Arch) {
+	for _, r := range catalog.Available(a.Target()) {
 		view.Available = append(view.Available, ModelEntry{
 			ID:        r.Model.ID,
 			Name:      r.Label(),
@@ -113,7 +113,7 @@ func (a *App) Models(ctx context.Context) (ModelsView, error) {
 
 // InstallModel downloads a model without changing which one is active.
 func (a *App) InstallModel(ctx context.Context, id string) error {
-	resolved, err := catalog.Resolve(id, a.host.OS, a.host.Arch)
+	resolved, err := catalog.Resolve(id, a.Target())
 	if err != nil {
 		return err
 	}
@@ -123,7 +123,7 @@ func (a *App) InstallModel(ctx context.Context, id string) error {
 // SelectModel makes a model active, downloading it first if necessary, then
 // regenerates the OpenCode configuration and restarts the services.
 func (a *App) SelectModel(ctx context.Context, id string) error {
-	resolved, err := catalog.Resolve(id, a.host.OS, a.host.Arch)
+	resolved, err := catalog.Resolve(id, a.Target())
 	if err != nil {
 		return err
 	}

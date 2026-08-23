@@ -34,7 +34,7 @@ func specArgs(t *testing.T, fake *run.Fake, mutate func(*config.Config)) []strin
 	}
 	cfg.Normalize()
 
-	model, err := catalog.Resolve(cfg.ActiveModel, "linux", "amd64")
+	model, err := catalog.Resolve(cfg.ActiveModel, catalog.HostTarget("linux", "amd64"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +200,7 @@ func TestServiceSpecFailsWithoutBackend(t *testing.T) {
 	fake := run.NewFake().Absent(Executable)
 	b, _ := newBackend(t, fake)
 
-	model, err := catalog.Resolve("qwen3.5-9b", "linux", "amd64")
+	model, err := catalog.Resolve("qwen3.5-9b", catalog.HostTarget("linux", "amd64"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +213,7 @@ func TestServiceSpecFailsWithoutBackend(t *testing.T) {
 func TestModelNameUsesTheLogicalID(t *testing.T) {
 	b, _ := newBackend(t, run.NewFake())
 
-	model, err := catalog.Resolve("qwen3.5-9b", "linux", "amd64")
+	model, err := catalog.Resolve("qwen3.5-9b", catalog.HostTarget("linux", "amd64"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestModelNameUsesTheLogicalID(t *testing.T) {
 		t.Errorf("ModelName = %q", got)
 	}
 
-	custom, err := catalog.Resolve("someone/Some-GGUF/file.gguf", "linux", "amd64")
+	custom, err := catalog.Resolve("someone/Some-GGUF/file.gguf", catalog.HostTarget("linux", "amd64"))
 	if err != nil {
 		t.Fatal(err)
 	}

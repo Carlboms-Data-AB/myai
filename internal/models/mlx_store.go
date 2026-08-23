@@ -24,8 +24,9 @@ type MLXStore struct {
 	Exec string
 	// Runner executes mlx-serve.
 	Runner run.Runner
-	// GOOS and GOARCH identify the platform for catalog lookups.
-	GOOS, GOARCH string
+	// Target identifies the platform and this store's backend, for catalog
+	// lookups.
+	Target catalog.Target
 }
 
 // NewMLXStore returns a store rooted at dir.
@@ -33,7 +34,12 @@ func NewMLXStore(dir, exec string, runner run.Runner, goos, goarch string) *MLXS
 	if exec == "" {
 		exec = "mlx-serve"
 	}
-	return &MLXStore{Root: dir, Exec: exec, Runner: runner, GOOS: goos, GOARCH: goarch}
+	return &MLXStore{
+		Root:   dir,
+		Exec:   exec,
+		Runner: runner,
+		Target: catalog.HostTarget(goos, goarch).WithBackend(catalog.BackendMLXServe),
+	}
 }
 
 // Backend returns the mlx-serve backend identifier.
@@ -80,7 +86,7 @@ func (s *MLXStore) List(ctx context.Context) ([]Installed, error) {
 				continue
 			}
 			ref := org.Name() + "/" + repo.Name()
-			name, managed := displayName(ref, s.GOOS, s.GOARCH)
+			name, managed := displayName(ref, s.Target)
 			out = append(out, Installed{
 				Ref:     ref,
 				Name:    name,

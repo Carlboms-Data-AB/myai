@@ -154,12 +154,24 @@ func (a *App) Executable() string {
 	return a.exe
 }
 
+// BackendID reports which backend the current configuration selects, resolving
+// "auto" to the right one for this machine.
+func (a *App) BackendID() string {
+	if a.cfg.Backend == config.BackendAuto || a.cfg.Backend == "" {
+		return catalog.DefaultBackend(a.host.OS, a.host.Arch)
+	}
+	return a.cfg.Backend
+}
+
+// Target describes what models have to be resolved for: this platform, and the
+// backend that will actually load them.
+func (a *App) Target() catalog.Target {
+	return catalog.HostTarget(a.host.OS, a.host.Arch).WithBackend(a.BackendID())
+}
+
 // Backend returns the inference backend for the current configuration.
 func (a *App) Backend() backend.Backend {
-	id := a.cfg.Backend
-	if id == config.BackendAuto || id == "" {
-		id = catalog.DefaultBackend(a.host.OS, a.host.Arch)
-	}
+	id := a.BackendID()
 	if id == config.BackendMLXServe {
 		return mlxserve.New(a.env.MLXModelDir(), a.runner, a.host.OS, a.host.Arch)
 	}
@@ -168,7 +180,7 @@ func (a *App) Backend() backend.Backend {
 
 // ActiveModel resolves the configured model for this platform.
 func (a *App) ActiveModel() (catalog.Resolved, error) {
-	return catalog.Resolve(a.cfg.ActiveModel, a.host.OS, a.host.Arch)
+	return catalog.Resolve(a.cfg.ActiveModel, a.Target())
 }
 
 // Inference returns a client for the local inference API.

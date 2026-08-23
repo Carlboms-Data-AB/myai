@@ -17,7 +17,7 @@ import (
 
 func mustResolve(t *testing.T, id, goos, goarch string) catalog.Resolved {
 	t.Helper()
-	r, err := catalog.Resolve(id, goos, goarch)
+	r, err := catalog.Resolve(id, catalog.HostTarget(goos, goarch))
 	if err != nil {
 		t.Fatal(err)
 	}

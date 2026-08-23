@@ -330,3 +330,67 @@ func TestWebAccessGeneratesOnceInstalled(t *testing.T) {
 		t.Errorf("access = %+v", access)
 	}
 }
+
+func TestPinnedBackendResolvesAMatchingModel(t *testing.T) {
+	// The Runtime menu lets a Mac pin llama.cpp. The active model, the store
+	// and the service arguments all have to agree, or llama-server is handed
+	// an MLX repository it cannot load.
+	a, _, _ := newTestApp(t, "darwin", "arm64")
+	if err := a.Update(func(c *config.Config) { c.Backend = config.BackendLlamaCPP }); err != nil {
+		t.Fatal(err)
+	}
+
+	model, err := a.ActiveModel()
+	if err != nil {
+		t.Fatalf("ActiveModel: %v", err)
+	}
+	if model.Backend() != config.BackendLlamaCPP {
+		t.Errorf("model resolved to %q, want llama.cpp", model.Backend())
+	}
+	if model.Artifact.File == "" {
+		t.Error("a llama.cpp model must name a GGUF file")
+	}
+
+	store := a.Backend().Store()
+	if store.Backend() != config.BackendLlamaCPP {
+		t.Errorf("store backend = %q", store.Backend())
+	}
+	if !strings.HasSuffix(store.PathFor(model), ".gguf") {
+		t.Errorf("model path = %q, want a GGUF file", store.PathFor(model))
+	}
+}
+
+func TestDefaultBackendStillWinsWhenNotPinned(t *testing.T) {
+	a, _, _ := newTestApp(t, "darwin", "arm64")
+
+	model, err := a.ActiveModel()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if model.Backend() != config.BackendMLXServe {
+		t.Errorf("model resolved to %q, want MLX by default on Apple Silicon", model.Backend())
+	}
+	if model.Artifact.Repo != "mlx-community/Qwen3.5-9B-6bit" {
+		t.Errorf("repo = %q", model.Artifact.Repo)
+	}
+}
+
+func TestModelsViewFollowsThePinnedBackend(t *testing.T) {
+	a, _, _ := newTestApp(t, "darwin", "arm64")
+	if err := a.Update(func(c *config.Config) { c.Backend = config.BackendLlamaCPP }); err != nil {
+		t.Fatal(err)
+	}
+
+	view, err := a.Models(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Available) == 0 {
+		t.Fatal("no models offered")
+	}
+	for _, m := range view.Available {
+		if m.Backend != config.BackendLlamaCPP {
+			t.Errorf("offered model %q uses %q", m.ID, m.Backend)
+		}
+	}
+}

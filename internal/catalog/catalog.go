@@ -53,6 +53,26 @@ type Artifact struct {
 	Custom bool `json:"-"`
 }
 
+// Target is what a model has to be resolved for: a platform, and optionally a
+// specific backend. Pinning the backend matters because some platforms can run
+// more than one, and the artifact has to match whichever will actually load it.
+type Target struct {
+	// OS and Arch are the platform, as in runtime.GOOS and runtime.GOARCH.
+	OS, Arch string
+	// Backend restricts resolution to artifacts that backend can load. An
+	// empty value takes whichever artifact fits the platform best.
+	Backend string
+}
+
+// HostTarget returns a Target for a platform with no backend pinned.
+func HostTarget(goos, goarch string) Target { return Target{OS: goos, Arch: goarch} }
+
+// WithBackend returns a copy of the target pinned to a backend.
+func (t Target) WithBackend(backend string) Target {
+	t.Backend = backend
+	return t
+}
+
 // Resolved pairs a logical model with the artifact chosen for a platform.
 type Resolved struct {
 	Model    Model
@@ -101,11 +121,11 @@ func All() []Model {
 	return out
 }
 
-// Available returns the models that have an artifact for the given platform.
-func Available(goos, goarch string) []Resolved {
+// Available returns the models that have an artifact for the given target.
+func Available(t Target) []Resolved {
 	var out []Resolved
 	for _, m := range All() {
-		if a, ok := m.artifactFor(goos, goarch); ok {
+		if a, ok := m.artifactFor(t); ok {
 			out = append(out, Resolved{Model: m, Artifact: a})
 		}
 	}
@@ -122,11 +142,15 @@ func Lookup(id string) (Model, bool) {
 	return Model{}, false
 }
 
-func (m Model) artifactFor(goos, goarch string) (Artifact, bool) {
+func (m Model) artifactFor(t Target) (Artifact, bool) {
 	for _, a := range m.Artifacts {
-		if matches(a.OS, goos) && matches(a.Arch, goarch) {
-			return a, true
+		if !matches(a.OS, t.OS) || !matches(a.Arch, t.Arch) {
+			continue
 		}
+		if t.Backend != "" && !strings.EqualFold(a.Backend, t.Backend) {
+			continue
+		}
+		return a, true
 	}
 	return Artifact{}, false
 }
@@ -147,21 +171,24 @@ func matches(list []string, value string) bool {
 // needs. The value is either a catalog id or, for advanced use, a direct
 // reference such as "mlx-community/Some-Model-6bit" or
 // "unsloth/Some-Model-GGUF/Some-Model-Q6_K.gguf".
-func Resolve(value, goos, goarch string) (Resolved, error) {
+func Resolve(value string, t Target) (Resolved, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return Resolved{}, fmt.Errorf("no model specified")
 	}
 
 	if m, ok := Lookup(value); ok {
-		a, ok := m.artifactFor(goos, goarch)
+		a, ok := m.artifactFor(t)
 		if !ok {
-			return Resolved{}, fmt.Errorf("model %q has no artifact for %s/%s", m.Name, goos, goarch)
+			if t.Backend != "" {
+				return Resolved{}, fmt.Errorf("model %q has no artifact for %s/%s on the %s backend", m.Name, t.OS, t.Arch, t.Backend)
+			}
+			return Resolved{}, fmt.Errorf("model %q has no artifact for %s/%s", m.Name, t.OS, t.Arch)
 		}
 		return Resolved{Model: m, Artifact: a}, nil
 	}
 
-	return resolveCustom(value, goos, goarch)
+	return resolveCustom(value, t)
 }
 
 // DefaultBackend reports which backend a platform uses when the user has not
@@ -174,8 +201,11 @@ func DefaultBackend(goos, goarch string) string {
 }
 
 // resolveCustom builds a synthetic model from a user-supplied reference.
-func resolveCustom(value, goos, goarch string) (Resolved, error) {
-	backend := DefaultBackend(goos, goarch)
+func resolveCustom(value string, t Target) (Resolved, error) {
+	backend := t.Backend
+	if backend == "" {
+		backend = DefaultBackend(t.OS, t.Arch)
+	}
 
 	repo, file, quant, err := ParseRef(value, backend)
 	if err != nil {

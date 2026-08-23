@@ -20,7 +20,7 @@ func params(t *testing.T, mutate func(*config.Config)) backend.SpecParams {
 		mutate(&cfg)
 		cfg.Normalize()
 	}
-	model, err := catalog.Resolve(cfg.ActiveModel, "darwin", "arm64")
+	model, err := catalog.Resolve(cfg.ActiveModel, catalog.HostTarget("darwin", "arm64"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestInstallNeedsHomebrew(t *testing.T) {
 }
 
 func TestModelNameIsTheRepositoryID(t *testing.T) {
-	model, err := catalog.Resolve("qwen3.5-9b", "darwin", "arm64")
+	model, err := catalog.Resolve("qwen3.5-9b", catalog.HostTarget("darwin", "arm64"))
 	if err != nil {
 		t.Fatal(err)
 	}

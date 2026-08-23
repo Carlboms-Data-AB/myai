@@ -16,7 +16,7 @@
           "size": 8215258652
         },
         {
-          "os": ["windows", "linux"],
+          "os": ["windows", "linux", "darwin"],
           "arch": ["amd64", "arm64"],
           "backend": "llama.cpp",
           "repo": "unsloth/Qwen3.5-9B-GGUF",
@@ -42,7 +42,7 @@
           "size": 5977073303
         },
         {
-          "os": ["windows", "linux"],
+          "os": ["windows", "linux", "darwin"],
           "arch": ["amd64", "arm64"],
           "backend": "llama.cpp",
           "repo": "unsloth/Qwen3.5-9B-GGUF",
