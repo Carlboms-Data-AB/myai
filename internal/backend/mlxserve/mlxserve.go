@@ -53,7 +53,7 @@ func (b *Backend) Detect(ctx context.Context) backend.Info {
 	info.Path = path
 
 	if res, err := b.Runner.Run(ctx, run.Spec{Name: Executable, Args: []string{"--version"}}); err == nil {
-		info.Version = firstLine(res.Output)
+		info.Version = versionLine(res.Output)
 	}
 	return info
 }
@@ -157,7 +157,23 @@ func (b *Backend) IdleUnload(context.Context) backend.IdleUnload {
 	return backend.IdleUnload{Supported: true, Mechanism: "--idle-evict-secs"}
 }
 
-func firstLine(s string) string {
-	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
-	return strings.TrimSpace(line)
+// versionLine picks the version out of "mlx-serve --version" output. That
+// output starts with bracketed memory diagnostics and then lists the versions
+// of several components, so the first line is not the answer.
+func versionLine(out string) string {
+	var candidates []string
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "[") {
+			continue
+		}
+		if strings.HasPrefix(line, Executable+" ") {
+			return line
+		}
+		candidates = append(candidates, line)
+	}
+	if len(candidates) > 0 {
+		return candidates[0]
+	}
+	return ""
 }

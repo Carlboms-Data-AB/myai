@@ -199,3 +199,43 @@ func TestBaseURLKeepsLoopback(t *testing.T) {
 		t.Errorf("BaseURL = %q", got)
 	}
 }
+
+// realVersionOutput is what mlx-serve 26.8.9 actually prints. The memory
+// diagnostic comes first, so taking the first line reports nonsense.
+const realVersionOutput = `[mem] MLX buffer-pool cap 2048 MB (was 23347 MB)
+mlx-serve 26.8.9
+mlx 0.32.0
+mlx-c fba4470b8907
+nax off (requires M5-class GPU)
+ggml 0.16.0 (505b1ed15)
+llama.cpp b10034
+gguf 3
+ds4 unknown
+`
+
+func TestVersionSkipsTheMemoryDiagnostic(t *testing.T) {
+	fake := run.NewFake().Respond("mlx-serve --version", realVersionOutput)
+
+	got := New("/models", fake, "darwin", "arm64").Detect(context.Background())
+	if got.Version != "mlx-serve 26.8.9" {
+		t.Errorf("Version = %q, want %q", got.Version, "mlx-serve 26.8.9")
+	}
+	if strings.Contains(got.Version, "[mem]") {
+		t.Error("a diagnostic line was reported as the version")
+	}
+}
+
+func TestVersionLine(t *testing.T) {
+	tests := map[string]string{
+		realVersionOutput:                          "mlx-serve 26.8.9",
+		"mlx-serve 1.0.0\n":                        "mlx-serve 1.0.0",
+		"[mem] noise\n[mem] more\nsomething 2.0\n": "something 2.0",
+		"[mem] only noise\n":                       "",
+		"":                                         "",
+	}
+	for in, want := range tests {
+		if got := versionLine(in); got != want {
+			t.Errorf("versionLine(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
