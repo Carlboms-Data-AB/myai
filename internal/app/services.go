@@ -54,7 +54,7 @@ func (a *App) ServiceSpecs(ctx context.Context) ([]service.Spec, error) {
 	if err != nil {
 		return nil, err
 	}
-	account, err := a.serviceAccount()
+	account, err := a.serviceAccount(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -135,9 +135,13 @@ func (a *App) StopLegacyServices(ctx context.Context) {
 // configuration asks for the model to stay in RAM, it is warmed here so the
 // first real request is fast.
 func (a *App) Restart(ctx context.Context) error {
+	name := a.ServiceName(service.RoleInference)
+	if state, err := a.services.Status(ctx, name); err == nil && !state.Installed {
+		return fmt.Errorf("the %s service is not installed; run Install / update first", name)
+	}
 	a.reporter.Step("Restarting services")
 
-	if err := a.services.Restart(ctx, a.ServiceName(service.RoleInference)); err != nil {
+	if err := a.services.Restart(ctx, name); err != nil {
 		return fmt.Errorf("restart the inference service: %w", err)
 	}
 

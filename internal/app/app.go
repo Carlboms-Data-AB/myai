@@ -7,6 +7,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/user"
@@ -236,8 +237,12 @@ func (a *App) newServiceManager() service.Manager {
 
 // serviceAccount returns the identity services should run as. Only Windows
 // needs one, and MyAI asks for it rather than defaulting to LocalSystem.
-func (a *App) serviceAccount() (service.Account, error) {
-	if !a.services.NeedsAccount() {
+//
+// Services that already exist keep the account they were registered with, so
+// changing a setting does not ask for a password again. Only creating a
+// service does.
+func (a *App) serviceAccount(ctx context.Context) (service.Account, error) {
+	if !a.services.NeedsAccount() || a.servicesRegistered(ctx) {
 		return service.Account{}, nil
 	}
 
@@ -256,6 +261,22 @@ func (a *App) serviceAccount() (service.Account, error) {
 		return service.Account{}, fmt.Errorf("a password is required to run the services as %s", name)
 	}
 	return service.Account{User: name, Password: password}, nil
+}
+
+// servicesRegistered reports whether every service MyAI manages is already
+// registered with the operating system.
+func (a *App) servicesRegistered(ctx context.Context) bool {
+	roles := []string{service.RoleInference}
+	if a.cfg.Web.Enabled {
+		roles = append(roles, service.RoleWeb)
+	}
+	for _, role := range roles {
+		state, err := a.services.Status(ctx, a.ServiceName(role))
+		if err != nil || !state.Installed {
+			return false
+		}
+	}
+	return true
 }
 
 func currentUsername() string {

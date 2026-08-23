@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -91,7 +92,7 @@ func TestOnlyWindowsNeedsAServiceAccount(t *testing.T) {
 		if a.Services().NeedsAccount() {
 			t.Errorf("%s should not need a service account", goos)
 		}
-		account, err := a.serviceAccount()
+		account, err := a.serviceAccount(context.Background())
 		if err != nil {
 			t.Errorf("%s: %v", goos, err)
 		}
@@ -100,14 +101,32 @@ func TestOnlyWindowsNeedsAServiceAccount(t *testing.T) {
 		}
 	}
 
-	a, _, _ := newTestApp(t, "windows", "amd64")
+	a, fake, _ := newTestApp(t, "windows", "amd64")
 	if !a.Services().NeedsAccount() {
 		t.Error("Windows services must declare that they need an account")
 	}
+	// No service exists yet, so one has to be created.
+	fake.DefaultErr = errors.New("service does not exist")
+
 	// Without an interactive session there is nobody to ask, so this must
 	// fail rather than silently install as LocalSystem.
-	if _, err := a.serviceAccount(); err == nil {
+	if _, err := a.serviceAccount(context.Background()); err == nil {
 		t.Error("expected an error when no password can be collected")
+	}
+}
+
+func TestExistingWindowsServicesDoNotAskForThePasswordAgain(t *testing.T) {
+	// Apply runs on every settings change. Prompting each time would make
+	// changing the context size ask for a Windows password.
+	a, fake, _ := newTestApp(t, "windows", "amd64")
+	fake.Respond("status", "SERVICE_RUNNING")
+
+	account, err := a.serviceAccount(context.Background())
+	if err != nil {
+		t.Fatalf("serviceAccount: %v", err)
+	}
+	if account.User != "" {
+		t.Errorf("account = %+v, want the existing one left alone", account)
 	}
 }
 
@@ -448,5 +467,18 @@ func TestResidencyIsHonestAboutWhatItKnows(t *testing.T) {
 		if got := residency(tt.status); got != tt.want {
 			t.Errorf("%s: residency = %q, want %q", tt.name, got, tt.want)
 		}
+	}
+}
+
+func TestRestartSaysWhenNothingIsInstalled(t *testing.T) {
+	a, fake, _ := newTestApp(t, "linux", "amd64")
+	fake.DefaultErr = errors.New("Unit myai.service could not be found.")
+
+	err := a.Restart(context.Background())
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), "Install / update") {
+		t.Errorf("err = %v, want it to point at the install step", err)
 	}
 }

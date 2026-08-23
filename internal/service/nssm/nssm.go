@@ -66,7 +66,8 @@ func (m *Manager) Install(ctx context.Context, spec service.Spec) error {
 	if strings.TrimSpace(spec.Exec) == "" {
 		return fmt.Errorf("service %s has no executable", spec.Name)
 	}
-	if strings.TrimSpace(spec.Account.User) == "" {
+	exists := m.Exists(ctx, spec.Name)
+	if !exists && strings.TrimSpace(spec.Account.User) == "" {
 		return ErrAccountRequired
 	}
 	for _, p := range []string{spec.StdoutLog, spec.StderrLog} {
@@ -77,7 +78,7 @@ func (m *Manager) Install(ctx context.Context, spec service.Spec) error {
 		}
 	}
 
-	if !m.Exists(ctx, spec.Name) {
+	if !exists {
 		if _, err := m.nssm(ctx, "install", spec.Name, spec.Exec); err != nil {
 			return fmt.Errorf("install %s: %w", spec.Name, err)
 		}
@@ -90,9 +91,13 @@ func (m *Manager) Install(ctx context.Context, spec service.Spec) error {
 	}
 
 	// The account is set separately so the password never reaches Settings,
-	// which is rendered in tests and diagnostics.
-	if _, err := m.nssm(ctx, "set", spec.Name, "ObjectName", spec.Account.User, spec.Account.Password); err != nil {
-		return fmt.Errorf("set service account for %s: %w", spec.Name, err)
+	// which is rendered in tests and diagnostics. An existing service keeps
+	// the account it already has, so routine reconfiguration does not have to
+	// ask for a password again.
+	if strings.TrimSpace(spec.Account.User) != "" {
+		if _, err := m.nssm(ctx, "set", spec.Name, "ObjectName", spec.Account.User, spec.Account.Password); err != nil {
+			return fmt.Errorf("set service account for %s: %w", spec.Name, err)
+		}
 	}
 	return nil
 }

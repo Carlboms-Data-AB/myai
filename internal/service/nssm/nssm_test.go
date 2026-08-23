@@ -101,12 +101,32 @@ func TestInstallRefusesWithoutAnAccount(t *testing.T) {
 	spec.Account = service.Account{}
 
 	fake := run.NewFake()
+	// A service that does not exist yet has no account to inherit.
+	fake.Fail("status MyAI", errors.New("service does not exist"))
 	err := New("nssm", fake).Install(context.Background(), spec)
 	if !errors.Is(err, ErrAccountRequired) {
 		t.Fatalf("err = %v, want ErrAccountRequired", err)
 	}
-	if len(fake.Calls) > 0 {
+	if fake.Ran("nssm install MyAI") {
 		t.Error("nothing should be installed without an account")
+	}
+}
+
+func TestExistingServiceKeepsItsAccount(t *testing.T) {
+	// Reconfiguring an existing service must not need the password again,
+	// otherwise every settings change would prompt for it.
+	spec := sampleSpec(t.TempDir())
+	spec.Account = service.Account{}
+
+	fake := run.NewFake().Respond("status MyAI", "SERVICE_RUNNING")
+	if err := New("nssm", fake).Install(context.Background(), spec); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if fake.Ran("ObjectName") {
+		t.Errorf("the account should have been left alone: %v", fake.CommandLines())
+	}
+	if !fake.Ran("set MyAI Application") {
+		t.Errorf("the service should still be reconfigured: %v", fake.CommandLines())
 	}
 }
 
