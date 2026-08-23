@@ -4,12 +4,14 @@ package hf
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -204,4 +206,85 @@ func (w *countingWriter) Write(p []byte) (int, error) {
 		w.reporter.Download(w.name, w.written, w.total)
 	}
 	return len(p), nil
+}
+
+// Files lists the file names in a repository.
+func (c *Client) Files(ctx context.Context, repo string) ([]string, error) {
+	url := fmt.Sprintf("%s/api/models/%s", Endpoint(), repo)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	addAuth(req)
+
+	resp, err := c.client().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("list %s: %s", repo, resp.Status)
+	}
+	var parsed struct {
+		Siblings []struct {
+			Name string `json:"rfilename"`
+		} `json:"siblings"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(parsed.Siblings))
+	for _, s := range parsed.Siblings {
+		out = append(out, s.Name)
+	}
+	return out, nil
+}
+
+// MatchGGUF picks the GGUF file in a repository matching a quantization
+// label such as "Q6_K". Projection files, which hold a vision encoder rather
+// than the model, are never a match.
+func MatchGGUF(files []string, quant string) (string, error) {
+	quant = strings.ToLower(strings.TrimSpace(quant))
+	if quant == "" {
+		return "", fmt.Errorf("no quantization given")
+	}
+
+	var matches []string
+	for _, f := range files {
+		lower := strings.ToLower(f)
+		if !strings.HasSuffix(lower, ".gguf") || strings.Contains(lower, "mmproj") {
+			continue
+		}
+		// Bound the label so "Q4_K" does not match "Q4_K_M".
+		if strings.Contains(lower, "-"+quant+".gguf") || strings.Contains(lower, "."+quant+".gguf") {
+			matches = append(matches, f)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("no %s file found; available: %s", strings.ToUpper(quant), strings.Join(ggufNames(files), ", "))
+	case 1:
+		return matches[0], nil
+	default:
+		sort.Strings(matches)
+		return matches[0], nil
+	}
+}
+
+// ggufNames lists the quantizations a repository offers, for error messages.
+func ggufNames(files []string) []string {
+	var out []string
+	for _, f := range files {
+		lower := strings.ToLower(f)
+		if strings.HasSuffix(lower, ".gguf") && !strings.Contains(lower, "mmproj") {
+			out = append(out, f)
+		}
+	}
+	sort.Strings(out)
+	if len(out) > 12 {
+		out = append(out[:12], "...")
+	}
+	return out
 }

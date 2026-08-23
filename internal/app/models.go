@@ -113,22 +113,34 @@ func (a *App) Models(ctx context.Context) (ModelsView, error) {
 
 // InstallModel downloads a model without changing which one is active.
 func (a *App) InstallModel(ctx context.Context, id string) error {
-	resolved, err := catalog.Resolve(id, a.Target())
+	store := a.Backend().Store()
+
+	resolved, err := a.resolveForStore(ctx, store, id)
 	if err != nil {
 		return err
 	}
-	return a.Backend().Store().Install(ctx, resolved, a.reporter)
+	return store.Install(ctx, resolved, a.reporter)
+}
+
+// resolveForStore turns a model id or reference into a fully settled artifact.
+func (a *App) resolveForStore(ctx context.Context, store models.Store, id string) (catalog.Resolved, error) {
+	resolved, err := catalog.Resolve(id, a.Target())
+	if err != nil {
+		return resolved, err
+	}
+	return store.Prepare(ctx, resolved)
 }
 
 // SelectModel makes a model active, downloading it first if necessary, then
 // regenerates the OpenCode configuration and restarts the services.
 func (a *App) SelectModel(ctx context.Context, id string) error {
-	resolved, err := catalog.Resolve(id, a.Target())
+	store := a.Backend().Store()
+
+	resolved, err := a.resolveForStore(ctx, store, id)
 	if err != nil {
 		return err
 	}
 
-	store := a.Backend().Store()
 	have, err := store.Has(ctx, resolved)
 	if err != nil {
 		return err
@@ -139,7 +151,13 @@ func (a *App) SelectModel(ctx context.Context, id string) error {
 		}
 	}
 
-	if err := a.Update(func(c *config.Config) { c.ActiveModel = id }); err != nil {
+	// A reference that named a quantization has now been settled to a file.
+	// Record the settled form so nothing has to ask the network again.
+	record := id
+	if resolved.Artifact.Custom {
+		record = resolved.Ref()
+	}
+	if err := a.Update(func(c *config.Config) { c.ActiveModel = record }); err != nil {
 		return err
 	}
 	return a.Apply(ctx)

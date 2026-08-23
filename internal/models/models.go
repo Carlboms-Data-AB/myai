@@ -45,6 +45,10 @@ type Store interface {
 	Location() string
 	// List returns everything installed, sorted by reference.
 	List(ctx context.Context) ([]Installed, error)
+	// Prepare fills in any part of an artifact that can only be settled by
+	// asking the remote repository, such as which file matches a
+	// quantization label. It performs no download.
+	Prepare(ctx context.Context, r catalog.Resolved) (catalog.Resolved, error)
 	// Has reports whether a resolved artifact is already on disk.
 	Has(ctx context.Context, r catalog.Resolved) (bool, error)
 	// Install downloads an artifact, doing nothing if it is already present.

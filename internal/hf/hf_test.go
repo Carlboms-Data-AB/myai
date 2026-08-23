@@ -145,3 +145,86 @@ func TestFileURLEscapesNames(t *testing.T) {
 		t.Errorf("FileURL = %q", got)
 	}
 }
+
+func TestMatchGGUFPicksTheNamedQuantization(t *testing.T) {
+	files := []string{
+		"README.md",
+		"Qwen3.5-9B-Q4_K_M.gguf",
+		"Qwen3.5-9B-Q4_K_S.gguf",
+		"Qwen3.5-9B-Q6_K.gguf",
+		"Qwen3.5-9B-Q8_0.gguf",
+		"mmproj-F16.gguf",
+	}
+	tests := map[string]string{
+		"Q6_K":   "Qwen3.5-9B-Q6_K.gguf",
+		"q6_k":   "Qwen3.5-9B-Q6_K.gguf",
+		"Q4_K_M": "Qwen3.5-9B-Q4_K_M.gguf",
+		"Q8_0":   "Qwen3.5-9B-Q8_0.gguf",
+	}
+	for quant, want := range tests {
+		got, err := MatchGGUF(files, quant)
+		if err != nil {
+			t.Fatalf("%s: %v", quant, err)
+		}
+		if got != want {
+			t.Errorf("MatchGGUF(%q) = %q, want %q", quant, got, want)
+		}
+	}
+}
+
+func TestMatchGGUFDoesNotConfuseNestedLabels(t *testing.T) {
+	// "Q4_K" must not silently pick up "Q4_K_M".
+	files := []string{"m-Q4_K_M.gguf", "m-Q4_K_S.gguf"}
+	if got, err := MatchGGUF(files, "Q4_K"); err == nil {
+		t.Errorf("MatchGGUF returned %q; Q4_K is not one of these files", got)
+	}
+}
+
+func TestMatchGGUFIgnoresProjectionFiles(t *testing.T) {
+	// mmproj files hold a vision encoder, not the model.
+	files := []string{"mmproj-F16.gguf", "model-F16.gguf"}
+	got, err := MatchGGUF(files, "F16")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "model-F16.gguf" {
+		t.Errorf("MatchGGUF = %q", got)
+	}
+}
+
+func TestMatchGGUFReportsWhatIsAvailable(t *testing.T) {
+	files := []string{"m-Q6_K.gguf", "m-Q8_0.gguf"}
+	_, err := MatchGGUF(files, "Q3_K_L")
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), "m-Q6_K.gguf") {
+		t.Errorf("err = %v, want it to list what is available", err)
+	}
+}
+
+func TestMatchGGUFRejectsEmptyQuant(t *testing.T) {
+	if _, err := MatchGGUF([]string{"m-Q6_K.gguf"}, ""); err == nil {
+		t.Error("expected an error")
+	}
+}
+
+func TestFilesListsRepositoryContents(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/api/models/") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Write([]byte(`{"siblings":[{"rfilename":"a-Q6_K.gguf"},{"rfilename":"README.md"}]}`))
+	}))
+	defer srv.Close()
+	t.Setenv("HF_ENDPOINT", srv.URL)
+
+	got, err := New().Files(context.Background(), "org/repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0] != "a-Q6_K.gguf" {
+		t.Errorf("Files = %v", got)
+	}
+}

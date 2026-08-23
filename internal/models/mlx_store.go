@@ -101,6 +101,12 @@ func (s *MLXStore) List(ctx context.Context) ([]Installed, error) {
 	return out, nil
 }
 
+// Prepare returns the artifact unchanged: an MLX artifact is a whole
+// repository, so there is no file to work out.
+func (s *MLXStore) Prepare(_ context.Context, r catalog.Resolved) (catalog.Resolved, error) {
+	return r, nil
+}
+
 // Has reports whether the repository directory exists and holds weights.
 func (s *MLXStore) Has(_ context.Context, r catalog.Resolved) (bool, error) {
 	path := s.PathFor(r)

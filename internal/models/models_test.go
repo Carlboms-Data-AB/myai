@@ -318,3 +318,68 @@ func TestEnsureSpaceAllowsSmallDownload(t *testing.T) {
 		t.Errorf("EnsureSpace: %v", err)
 	}
 }
+
+func TestGGUFStorePrepareResolvesAQuantizationLabel(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"siblings":[{"rfilename":"Qwen3.5-9B-Q5_K_M.gguf"},{"rfilename":"Qwen3.5-9B-Q6_K.gguf"}]}`))
+	}))
+	defer srv.Close()
+	t.Setenv("HF_ENDPOINT", srv.URL)
+
+	store := NewGGUFStore(t.TempDir(), "linux", "amd64")
+	// This is the form the menu and the README tell people they can use.
+	r := mustResolve(t, "unsloth/Qwen3.5-9B-GGUF:Q5_K_M", "linux", "amd64")
+	if r.Artifact.File != "" {
+		t.Fatalf("precondition: the reference should carry no file, got %q", r.Artifact.File)
+	}
+
+	prepared, err := store.Prepare(context.Background(), r)
+	if err != nil {
+		t.Fatalf("Prepare: %v", err)
+	}
+	if prepared.Artifact.File != "Qwen3.5-9B-Q5_K_M.gguf" {
+		t.Errorf("File = %q", prepared.Artifact.File)
+	}
+	if !strings.HasSuffix(store.PathFor(prepared), "Qwen3.5-9B-Q5_K_M.gguf") {
+		t.Errorf("PathFor = %q", store.PathFor(prepared))
+	}
+}
+
+func TestGGUFStorePrepareLeavesAnExplicitFileAlone(t *testing.T) {
+	store := NewGGUFStore(t.TempDir(), "linux", "amd64")
+	r := mustResolve(t, "qwen3.5-9b", "linux", "amd64")
+
+	prepared, err := store.Prepare(context.Background(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.Artifact.File != r.Artifact.File {
+		t.Errorf("File changed from %q to %q", r.Artifact.File, prepared.Artifact.File)
+	}
+}
+
+func TestGGUFStorePrepareExplainsABareRepository(t *testing.T) {
+	store := NewGGUFStore(t.TempDir(), "linux", "amd64")
+	r := mustResolve(t, "unsloth/Some-GGUF", "linux", "amd64")
+
+	_, err := store.Prepare(context.Background(), r)
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), "Q6_K") {
+		t.Errorf("err = %v, want it to suggest a quantization", err)
+	}
+}
+
+func TestMLXStorePrepareIsAPassThrough(t *testing.T) {
+	store := NewMLXStore(t.TempDir(), "mlx-serve", run.NewFake(), "darwin", "arm64")
+	r := mustResolve(t, "qwen3.5-9b", "darwin", "arm64")
+
+	prepared, err := store.Prepare(context.Background(), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.Artifact.Repo != r.Artifact.Repo {
+		t.Errorf("Prepare changed the artifact: %+v", prepared.Artifact)
+	}
+}

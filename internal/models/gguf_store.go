@@ -97,6 +97,29 @@ func (s *GGUFStore) List(context.Context) ([]Installed, error) {
 	return out, nil
 }
 
+// Prepare works out which file in the repository to use. A reference such as
+// "org/repo:Q6_K" names a quantization rather than a file, so the repository
+// is listed and the matching file chosen.
+func (s *GGUFStore) Prepare(ctx context.Context, r catalog.Resolved) (catalog.Resolved, error) {
+	if r.Artifact.File != "" {
+		return r, nil
+	}
+	if r.Artifact.Quant == "" {
+		return r, fmt.Errorf("%s does not name a file or a quantization; try %s:Q6_K", r.Artifact.Repo, r.Artifact.Repo)
+	}
+
+	files, err := s.client().Files(ctx, r.Artifact.Repo)
+	if err != nil {
+		return r, err
+	}
+	file, err := hf.MatchGGUF(files, r.Artifact.Quant)
+	if err != nil {
+		return r, fmt.Errorf("%s: %w", r.Artifact.Repo, err)
+	}
+	r.Artifact.File = file
+	return r, nil
+}
+
 // Has reports whether the artifact's file is fully present.
 func (s *GGUFStore) Has(_ context.Context, r catalog.Resolved) (bool, error) {
 	info, err := os.Stat(s.PathFor(r))
