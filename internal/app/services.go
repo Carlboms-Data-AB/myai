@@ -51,16 +51,39 @@ func (a *App) WriteOpenCodeConfig(ctx context.Context) error {
 	}
 	b := a.Backend()
 
+	context := a.servedContext(ctx, b.ModelName(model))
+	output := a.cfg.Inference.Output
+	if output >= context {
+		output = context / 2
+	}
+
 	return opencode.WriteConfig(a.env.OpenCodeConfigFile(), opencode.ConfigInput{
 		BaseURL:   b.BaseURL(a.cfg),
 		ModelID:   b.ModelName(model),
 		ModelName: model.Label(),
 		Limits: opencode.ModelLimits{
-			Context: a.cfg.Inference.Context,
-			Output:  a.cfg.Inference.Output,
+			Context: context,
+			Output:  output,
 		},
 		WebTools: a.cfg.Tools.WebSearch,
 	})
+}
+
+// servedContext returns the context window to advertise to OpenCode. The
+// configured value is used unless the server is running and says it serves
+// less, because telling OpenCode it has more context than it does means
+// sessions fail once they grow.
+func (a *App) servedContext(ctx context.Context, modelID string) int {
+	configured := a.cfg.Inference.Context
+
+	served, ok := a.Inference().ContextLength(ctx, modelID)
+	if !ok || served <= 0 || served >= configured {
+		return configured
+	}
+	a.reporter.Warn(fmt.Sprintf(
+		"the server serves %d tokens of context, not the configured %d; telling OpenCode the smaller figure",
+		served, configured))
+	return served
 }
 
 // ServiceSpecs builds the definitions for every service MyAI manages. The web
@@ -81,6 +104,7 @@ func (a *App) ServiceSpecs(ctx context.Context) ([]service.Spec, error) {
 		Name:      a.ServiceName(service.RoleInference),
 		StdoutLog: a.env.LogFile("inference"),
 		StderrLog: a.env.LogFile("inference-error"),
+		LogDir:    a.env.LogDir(),
 		WorkDir:   a.env.State,
 		Account:   account,
 	})
@@ -179,7 +203,32 @@ func (a *App) Restart(ctx context.Context) error {
 	if err := a.services.Restart(ctx, a.ServiceName(service.RoleWeb)); err != nil {
 		return fmt.Errorf("restart the OpenCode Web service: %w", err)
 	}
+	// OpenCode Web takes a moment to start listening. Returning before it
+	// does makes a check that runs straight afterwards fail for no reason.
+	if a.WaitWebReady(ctx, a.readyTimeout) {
+		a.reporter.Info("OpenCode Web ready at " + opencode.LocalWebURL(a.cfg))
+	} else {
+		a.reporter.Warn("OpenCode Web has not started answering yet")
+	}
 	return nil
+}
+
+// WaitWebReady polls the Web UI until it answers or the deadline passes.
+func (a *App) WaitWebReady(ctx context.Context, total time.Duration) bool {
+	deadline := time.Now().Add(total)
+	for {
+		if a.WebReachable(ctx) {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(time.Second):
+		}
+	}
 }
 
 // Start starts both services without reinstalling them.
