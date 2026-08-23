@@ -2,6 +2,7 @@ package launchd
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -198,5 +199,36 @@ func TestStopLeavesPlistInPlace(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(agents, "se.carlbomsdata.myai.plist")); err != nil {
 		t.Error("stopping must not delete the agent definition")
+	}
+}
+
+func TestInstallSurvivesAJobThatIsStillLoaded(t *testing.T) {
+	// launchctl bootout returns before the job is gone, so bootstrap can fail
+	// with "Bootstrap failed: 5". That is not a real failure: the definition
+	// is in place and the job just has to pick it up.
+	dir := t.TempDir()
+	fake := run.NewFake()
+	fake.Respond("launchctl print", "state = running\npid = 4242")
+	fake.Fail("launchctl bootstrap", errors.New("exit status 5: Bootstrap failed: 5: Input/output error"))
+
+	m := New(filepath.Join(dir, "LaunchAgents"), 501, fake)
+	if err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if !fake.Ran("launchctl kickstart -k") {
+		t.Errorf("a loaded job should be kickstarted: %v", fake.CommandLines())
+	}
+}
+
+func TestInstallReportsARealBootstrapFailure(t *testing.T) {
+	// When the job genuinely is not loaded, a bootstrap failure is real.
+	dir := t.TempDir()
+	fake := run.NewFake()
+	fake.Fail("launchctl bootstrap", errors.New("exit status 5"))
+	fake.Fail("launchctl print", errors.New("could not find service"))
+
+	m := New(filepath.Join(dir, "LaunchAgents"), 501, fake)
+	if err := m.Install(context.Background(), sampleSpec(dir)); err == nil {
+		t.Fatal("expected the failure to be reported")
 	}
 }

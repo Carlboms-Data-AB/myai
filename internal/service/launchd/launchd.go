@@ -77,17 +77,45 @@ func (m *Manager) Install(ctx context.Context, spec service.Spec) error {
 	}
 
 	// Booting out first makes a reinstall pick up the new definition.
-	_, _ = m.Runner.Run(ctx, run.Spec{Name: "launchctl", Args: []string{"bootout", m.target(spec.Name)}})
+	m.bootout(ctx, spec.Name)
 
 	if _, err := m.Runner.Run(ctx, run.Spec{Name: "launchctl", Args: []string{"bootstrap", m.domain(), path}}); err != nil {
+		// If it is loaded anyway, the definition is in place and all that is
+		// left is to make the running job pick it up.
+		if m.loaded(ctx, spec.Name) {
+			return m.kickstart(ctx, spec.Name)
+		}
 		return fmt.Errorf("load %s: %w", spec.Name, err)
 	}
 	return nil
 }
 
+// loaded reports whether launchd currently knows the job. A successful print
+// with nothing in it does not describe a job, so it does not count.
+func (m *Manager) loaded(ctx context.Context, name string) bool {
+	res, err := m.Runner.Run(ctx, run.Spec{Name: "launchctl", Args: []string{"print", m.target(name)}})
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(res.Output) != ""
+}
+
+// bootout asks launchd to unload the job. It returns before launchd has
+// necessarily finished, which is why callers cope with a job that is still
+// loaded rather than assuming it is gone.
+func (m *Manager) bootout(ctx context.Context, name string) {
+	_, _ = m.Runner.Run(ctx, run.Spec{Name: "launchctl", Args: []string{"bootout", m.target(name)}})
+}
+
+// kickstart restarts a loaded job so it picks up a new definition.
+func (m *Manager) kickstart(ctx context.Context, name string) error {
+	_, err := m.Runner.Run(ctx, run.Spec{Name: "launchctl", Args: []string{"kickstart", "-k", m.target(name)}})
+	return err
+}
+
 // Remove unloads the agent and deletes its plist.
 func (m *Manager) Remove(ctx context.Context, name string) error {
-	_, _ = m.Runner.Run(ctx, run.Spec{Name: "launchctl", Args: []string{"bootout", m.target(name)}})
+	m.bootout(ctx, name)
 	err := os.Remove(m.PlistPath(name))
 	if os.IsNotExist(err) {
 		return nil
@@ -104,13 +132,12 @@ func (m *Manager) Start(ctx context.Context, name string) error {
 	// Bootstrapping an already-loaded agent fails harmlessly, so the kickstart
 	// below is what actually guarantees it is running.
 	_, _ = m.Runner.Run(ctx, run.Spec{Name: "launchctl", Args: []string{"bootstrap", m.domain(), path}})
-	_, err := m.Runner.Run(ctx, run.Spec{Name: "launchctl", Args: []string{"kickstart", "-k", m.target(name)}})
-	return err
+	return m.kickstart(ctx, name)
 }
 
 // Stop unloads the agent. The plist stays on disk so it can be started again.
 func (m *Manager) Stop(ctx context.Context, name string) error {
-	_, _ = m.Runner.Run(ctx, run.Spec{Name: "launchctl", Args: []string{"bootout", m.target(name)}})
+	m.bootout(ctx, name)
 	return nil
 }
 
