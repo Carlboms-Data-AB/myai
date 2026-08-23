@@ -124,7 +124,7 @@ func residency(s Status) string {
 	case !s.APIReachable:
 		return "unknown, the inference API is not answering"
 	case s.KeepInRAM:
-		return "kept in RAM"
+		return "set to stay resident"
 	default:
 		return "loaded on demand"
 	}

@@ -461,7 +461,7 @@ func TestResidencyIsHonestAboutWhatItKnows(t *testing.T) {
 	}{
 		{"no model", Status{}, "not installed"},
 		{"api down", Status{ModelInstalled: true}, "unknown, the inference API is not answering"},
-		{"kept resident", Status{ModelInstalled: true, APIReachable: true, KeepInRAM: true}, "kept in RAM"},
+		{"kept resident", Status{ModelInstalled: true, APIReachable: true, KeepInRAM: true}, "set to stay resident"},
 		{"on demand", Status{ModelInstalled: true, APIReachable: true}, "loaded on demand"},
 	}
 	for _, tt := range tests {
