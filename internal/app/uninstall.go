@@ -59,7 +59,13 @@ func (a *App) PlanUninstall(ctx context.Context, mode UninstallMode) (UninstallP
 			a.env.State,
 			a.env.Executable(),
 		)
-		plan.Keeps = append(plan.Keeps, "the inference backend and OpenCode")
+		// Tools MyAI downloaded itself live here and go with it. Anything
+		// installed independently, such as a Homebrew mlx-serve or an
+		// OpenCode already on PATH, is left alone.
+		if dirExists(a.env.ToolsDir()) {
+			plan.Removes = append(plan.Removes, a.env.ToolsDir()+" (tools MyAI downloaded)")
+		}
+		plan.Keeps = append(plan.Keeps, "anything you installed yourself, such as a Homebrew mlx-serve")
 	}
 	if removesModels {
 		plan.Removes = append(plan.Removes,
@@ -168,4 +174,10 @@ func (a *App) removePathBlock() error {
 		return nil
 	}
 	return os.WriteFile(profile, []byte(cleaned+"\n"), 0o644)
+}
+
+// dirExists reports whether a directory is present.
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }

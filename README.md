@@ -461,9 +461,10 @@ it will keep before it does anything, and deleting models requires typing a
 confirmation phrase, because they are large and slow to replace.
 
 Uninstalling removes the services, the configuration, the credentials, the
-logs, the tools MyAI downloaded, the PATH entry it added and the `myai`
-command. It leaves anything you installed yourself, such as a Homebrew
-mlx-serve or an OpenCode already on your PATH.
+logs, the PATH entry it added and the `myai` command. It also removes tools
+MyAI downloaded itself, which on a machine where MyAI installed OpenCode means
+OpenCode goes too. Anything you installed independently is left alone: a
+Homebrew mlx-serve, or an OpenCode that was already on your PATH.
 
 ## Files
 

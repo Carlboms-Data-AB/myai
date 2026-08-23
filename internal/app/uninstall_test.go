@@ -162,3 +162,35 @@ func TestUninstallRemovesThePathBlockOnly(t *testing.T) {
 		t.Errorf("unrelated profile lines were lost:\n%s", body)
 	}
 }
+
+func TestUninstallPlanDoesNotPromiseToKeepToolsItRemoves(t *testing.T) {
+	// The plan used to say OpenCode was kept, while the uninstall deleted the
+	// copy MyAI had downloaded.
+	a, _, env := newTestApp(t, "darwin", "arm64")
+	if err := a.env.EnsureDirs(); err != nil {
+		t.Fatal(err)
+	}
+	opencodeDir := filepath.Join(env.ToolsDir(), "opencode")
+	if err := os.MkdirAll(opencodeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	plan, err := a.PlanUninstall(context.Background(), UninstallKeepModels)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keeps := strings.Join(plan.Keeps, " ")
+	if strings.Contains(keeps, "OpenCode") {
+		t.Errorf("the plan must not promise to keep OpenCode: %v", plan.Keeps)
+	}
+	if !strings.Contains(strings.Join(plan.Removes, " "), env.ToolsDir()) {
+		t.Errorf("the plan should say the downloaded tools go: %v", plan.Removes)
+	}
+
+	if err := a.Uninstall(context.Background(), UninstallKeepModels); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(opencodeDir); !os.IsNotExist(err) {
+		t.Error("the downloaded tools should have been removed")
+	}
+}
