@@ -53,11 +53,17 @@ type Config struct {
 	Tools     Tools     `toml:"tools"`
 }
 
-// Runtime configures how the inference backend is built and installed.
+// Runtime configures how the inference backend is built and run.
 type Runtime struct {
 	// Acceleration selects the llama.cpp build. It has no effect on Apple
 	// Silicon, where MLX always uses Metal.
 	Acceleration string `toml:"acceleration"`
+	// SkipMemoryCheck tells the backend to load the model even when its own
+	// memory pre-flight says there is not enough room. mlx-serve measures
+	// memory conservatively and can refuse a model that would in fact load,
+	// for instance when the page cache still holds the weights that were just
+	// read from disk. Only mlx-serve has such a check.
+	SkipMemoryCheck bool `toml:"skip_memory_check"`
 }
 
 // Inference configures the local model server.

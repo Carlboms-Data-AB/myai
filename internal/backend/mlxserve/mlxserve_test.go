@@ -69,8 +69,10 @@ func TestKeepInRAMLeavesEagerWarmupAlone(t *testing.T) {
 	if strings.Contains(got, "--idle-evict-secs") {
 		t.Errorf("a resident model must not be evicted: %q", got)
 	}
-	if !strings.Contains(got, "--max-resident-models 1") {
-		t.Errorf("the model must be allowed to stay loaded: %q", got)
+	// The prototype ran the defaults and kept its model resident, so MyAI
+	// adds nothing here.
+	if strings.Contains(got, "--max-resident") {
+		t.Errorf("keeping the model in RAM should not change the resident-set defaults: %q", got)
 	}
 }
 
@@ -237,5 +239,38 @@ func TestVersionLine(t *testing.T) {
 		if got := versionLine(in); got != want {
 			t.Errorf("versionLine(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestKeepInRAMRunsTheSameCommandThePrototypeDid(t *testing.T) {
+	// The Bash prototype ran this and kept a 9B model resident on a 24 GB
+	// Mac. MyAI must not quietly differ from it.
+	got := argsFor(t, func(c *config.Config) { c.Inference.KeepInRAM = true })
+
+	want := []string{
+		"--serve",
+		"--model-dir", "/Users/t/.mlx-serve/models",
+		"--host", "127.0.0.1",
+		"--port", "11234",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("args = %v, want exactly %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("arg %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestSkipMemoryCheckIsOptIn(t *testing.T) {
+	off := joined(argsFor(t, nil))
+	if strings.Contains(off, "--skip-mem-preflight") {
+		t.Errorf("the memory check must not be skipped unless asked: %q", off)
+	}
+
+	on := joined(argsFor(t, func(c *config.Config) { c.Runtime.SkipMemoryCheck = true }))
+	if !strings.Contains(on, "--skip-mem-preflight") {
+		t.Errorf("args %q should skip the pre-flight", on)
 	}
 }

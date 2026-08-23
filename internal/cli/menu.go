@@ -239,15 +239,16 @@ func runtimeMenu(ctx context.Context, a *app.App, c *ui.Console) error {
 		c.Field("2  Idle unload", idleLabel(cfg))
 		c.Field("3  Acceleration", accelerationLabel(a, cfg))
 		c.Field("4  Backend", backendLabel(a, cfg))
-		c.Line("  5  Warm the model now")
-		c.Line("  6  Back")
+		c.Field("5  Skip memory pre-flight", ui.YesNo(cfg.Runtime.SkipMemoryCheck))
+		c.Line("  6  Warm the model now")
+		c.Line("  7  Back")
 		c.Blank()
 
-		choice, err := c.Text("choose", "6")
+		choice, err := c.Text("choose", "7")
 		if err != nil {
 			return nil
 		}
-		if choice == "6" || choice == "" {
+		if choice == "7" || choice == "" {
 			return nil
 		}
 		if err := runtimeChoice(ctx, a, c, choice); err != nil {
@@ -327,6 +328,24 @@ func runtimeChoice(ctx context.Context, a *app.App, c *ui.Console, choice string
 		return a.Apply(ctx)
 
 	case "5":
+		if !a.Host().SupportsMLX() {
+			c.Line("Only mlx-serve has a memory pre-flight to skip.")
+			c.Pause()
+			return nil
+		}
+		c.Line("mlx-serve refuses to load a model when its own memory check says there is")
+		c.Line("not enough room. That check is conservative and can be wrong, for instance")
+		c.Line("when the page cache still holds the weights just read from disk.")
+		skip, err := c.Confirm("Load the model even when the check objects?", !a.Config().Runtime.SkipMemoryCheck)
+		if err != nil {
+			return err
+		}
+		if err := a.Update(func(cfg *config.Config) { cfg.Runtime.SkipMemoryCheck = skip }); err != nil {
+			return err
+		}
+		return a.Apply(ctx)
+
+	case "6":
 		if err := a.WarmModel(ctx); err != nil {
 			return err
 		}
@@ -334,7 +353,7 @@ func runtimeChoice(ctx context.Context, a *app.App, c *ui.Console, choice string
 		c.Pause()
 		return nil
 	}
-	return fmt.Errorf("choose a number between 1 and 6")
+	return fmt.Errorf("choose a number between 1 and 7")
 }
 
 func idleLabel(cfg config.Config) string {

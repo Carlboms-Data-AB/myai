@@ -344,6 +344,20 @@ backend, and MyAI is explicit about the difference:
 MyAI never stops the inference service on idle, because that would take the
 API away from a running OpenCode session.
 
+### When the backend refuses to load a model
+
+mlx-serve runs a memory pre-flight and will not load a model it thinks will
+not fit. The check is conservative and measures memory that is free right now,
+which on macOS can be much less than what is really available: the page cache
+may still be holding the several gigabytes of weights it has just read from
+disk.
+
+If `myai test` reports a memory failure while the machine plainly has room,
+turn on **Runtime · Skip memory pre-flight**. That passes
+`--skip-mem-preflight`, and mlx-serve loads the model anyway. It is off by
+default, because a check that is usually right should not be silently
+disabled. llama.cpp has no equivalent check and ignores the setting.
+
 ### Background services
 
 Two services are managed:

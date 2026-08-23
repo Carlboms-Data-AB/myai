@@ -126,10 +126,13 @@ func (b *Backend) ServiceSpec(ctx context.Context, p backend.SpecParams) (servic
 		"--host", p.Config.Inference.Host,
 		"--port", strconv.Itoa(p.Config.Inference.Port),
 	}
+	if p.Config.Runtime.SkipMemoryCheck {
+		args = append(args, "--skip-mem-preflight")
+	}
 	if p.Config.Inference.KeepInRAM {
-		// Eager warmup is the default, so there is nothing to add. Make sure
-		// the model is allowed to stay resident.
-		args = append(args, "--max-resident-models", "1")
+		// Nothing to add: mlx-serve warms eagerly and keeps models resident
+		// by default. Capping the resident set here would only differ from
+		// the defaults the prototype ran on, without keeping anything more.
 	} else {
 		args = append(args, "--no-warmup-eager")
 		if seconds := p.Config.IdleUnloadSeconds(); seconds > 0 {
