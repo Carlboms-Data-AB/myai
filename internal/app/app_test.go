@@ -15,6 +15,7 @@ import (
 	"github.com/Carlboms-Data-AB/myai/internal/config"
 	"github.com/Carlboms-Data-AB/myai/internal/paths"
 	"github.com/Carlboms-Data-AB/myai/internal/platform"
+	"github.com/Carlboms-Data-AB/myai/internal/progress"
 	"github.com/Carlboms-Data-AB/myai/internal/run"
 	"github.com/Carlboms-Data-AB/myai/internal/service"
 )
@@ -481,4 +482,52 @@ func TestRestartSaysWhenNothingIsInstalled(t *testing.T) {
 	if !strings.Contains(err.Error(), "Install / update") {
 		t.Errorf("err = %v, want it to point at the install step", err)
 	}
+}
+
+func TestApplyWarnsWhenTheModelIsNotDownloaded(t *testing.T) {
+	// Otherwise the only symptom is a service that will not stay up.
+	home := t.TempDir()
+	env := paths.Resolve("darwin", "arm64", home, nil)
+	fake := run.NewFake()
+
+	var warnings []string
+	rep := recordingReporter{warn: func(m string) { warnings = append(warnings, m) }}
+
+	a, err := app_New(&env, fake, rep, filepath.Join(home, "myai"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Apply(context.Background()); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "not downloaded") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected a warning about the missing model, got %v", warnings)
+	}
+}
+
+// recordingReporter captures warnings and ignores the rest.
+type recordingReporter struct{ warn func(string) }
+
+func (recordingReporter) Step(string)                   {}
+func (recordingReporter) Info(string)                   {}
+func (r recordingReporter) Warn(m string)               { r.warn(m) }
+func (recordingReporter) Check(string, bool, string)    {}
+func (recordingReporter) Download(string, int64, int64) {}
+
+func app_New(env *paths.Env, runner run.Runner, rep progress.Reporter, exe string) (*App, error) {
+	return New(Options{
+		Env:          env,
+		Host:         &platform.Host{OS: "darwin", Arch: "arm64", User: "tester"},
+		Runner:       runner,
+		Reporter:     rep,
+		Executable:   exe,
+		ReadyTimeout: 10 * time.Millisecond,
+	})
 }

@@ -20,10 +20,26 @@ func (a *App) Apply(ctx context.Context) error {
 	if err := a.WriteOpenCodeConfig(ctx); err != nil {
 		return err
 	}
+	a.warnIfModelMissing(ctx)
 	if err := a.InstallServices(ctx); err != nil {
 		return err
 	}
 	return a.Restart(ctx)
+}
+
+// warnIfModelMissing points out that the backend is about to be started
+// against a model that is not on disk, which otherwise shows up only as a
+// service that will not stay up.
+func (a *App) warnIfModelMissing(ctx context.Context) {
+	model, err := a.ActiveModel()
+	if err != nil {
+		return
+	}
+	have, err := a.Backend().Store().Has(ctx, model)
+	if err != nil || have {
+		return
+	}
+	a.reporter.Warn(model.Label() + " is not downloaded; run Install / update or Models to fetch it")
 }
 
 // WriteOpenCodeConfig regenerates the managed OpenCode configuration from the
