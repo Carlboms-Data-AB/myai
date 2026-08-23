@@ -62,6 +62,8 @@ type SpecParams struct {
 	// StdoutLog and StderrLog are where the service writes output.
 	StdoutLog string
 	StderrLog string
+	// LogDir is where a backend that keeps its own log should write it.
+	LogDir string
 	// WorkDir is the service working directory.
 	WorkDir string
 	// Account is the identity to run as, where the platform needs one.

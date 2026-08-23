@@ -126,6 +126,12 @@ func (b *Backend) ServiceSpec(ctx context.Context, p backend.SpecParams) (servic
 		"--host", p.Config.Inference.Host,
 		"--port", strconv.Itoa(p.Config.Inference.Port),
 	}
+	// mlx-serve writes to its own log directory rather than to stdout, so
+	// point it at MyAI's. Without this the service log is empty and the
+	// backend's own diagnostics are somewhere else entirely.
+	if p.LogDir != "" {
+		args = append(args, "--log-file", p.LogDir)
+	}
 	if p.Config.Runtime.SkipMemoryCheck {
 		args = append(args, "--skip-mem-preflight")
 	}
