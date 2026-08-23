@@ -1,26 +1,31 @@
-# Local AI Mac mini
+# MyAI
 
-A self-contained local coding agent for Apple Silicon Macs.
+MyAI is a local coding agent stack. It runs a language model on your own
+machine, points OpenCode at it, and keeps the whole thing alive as a
+background service you can reach from a browser on another computer.
 
-This repository combines OpenCode, mlx-serve, Qwen and Apple MLX into a local coding environment that can work directly inside your repositories.
+Nothing about a coding session leaves the machine unless you switch on the
+optional web tools. There is no cloud provider in the loop, and the OpenCode
+configuration MyAI manages allows only the local model, so a session cannot
+quietly fall back to a hosted LLM.
 
-It can inspect and edit files, run shell commands, build projects, run tests and work with Git. It also runs OpenCode Web as a persistent background service so the coding environment can be used from another machine in a browser. Optional web search and browser automation can be enabled when external access is useful.
-
-The included `local-ai` command handles installation, configuration, background services, diagnostics and daily use.
+The `myai` command handles installation, models, configuration, background
+services, diagnostics and daily use. It runs natively on macOS, Windows and
+Linux. On Windows it is genuinely native: no WSL, anywhere.
 
 ## What it does
 
-- runs Qwen locally on Apple Silicon with MLX
-- uses OpenCode as the coding-agent interface
-- gives the agent access to repositories, files, shell commands, builds, tests and Git
-- runs OpenCode Web persistently for browser access from another machine
-- starts both `mlx-serve` and OpenCode Web automatically with `launchd`
-- keeps the local model API bound to `127.0.0.1`
-- protects remote OpenCode Web access with a generated password
-- keeps this stack's OpenCode configuration separate from your normal OpenCode config
-- supports optional web search and web fetching
-- supports optional browser automation with ego lite
-- provides one `local-ai` command for setup, configuration, status, testing, restart and daily use
+- runs a language model locally, on Apple Silicon through MLX and on Windows
+  and Linux through llama.cpp
+- gives OpenCode access to your repositories, files, shell, builds, tests and
+  Git
+- serves the OpenCode Web interface as a background service so you can work
+  from a browser on another machine
+- keeps the model loaded in memory, or unloads it after an idle period, as you
+  prefer
+- downloads, lists, switches and deletes models without you having to know
+  what format your platform needs
+- keeps its OpenCode configuration separate from your personal one
 
 ## Architecture
 
@@ -28,395 +33,374 @@ The included `local-ai` command handles installation, configuration, background 
 Browser on another machine
           │
           ▼
-OpenCode Web :4096
+   OpenCode Web  :4096
           │
           ├── repository and file access
           ├── shell commands
           ├── builds and tests
           ├── Git
-          ├── optional websearch / webfetch
-          └── optional ego-browser automation
+          ├── optional web search and fetching
+          └── optional browser automation
           │
           ▼
-mlx-serve :11234
+   inference API  127.0.0.1:11234
           │
           ▼
-Qwen3.5 9B 6-bit
-          │
-          ▼
-Apple MLX / Metal
+   ┌──────────────┬─────────────────────┐
+   │ macOS        │ Windows and Linux   │
+   │ mlx-serve    │ llama.cpp           │
+   │ MLX model    │ GGUF model          │
+   │ Metal        │ Vulkan, CUDA or CPU │
+   └──────────────┴─────────────────────┘
 ```
 
-The language model runs locally. `mlx-serve` listens only on `127.0.0.1`. OpenCode Web listens on the network with password authentication so it can be reached from another machine.
+The inference API binds to `127.0.0.1` and is not exposed to the network.
+OpenCode Web is the only part that listens beyond loopback, and it requires a
+password when it does.
+
+You choose a model by name. MyAI resolves that name to whichever artifact your
+platform actually needs:
+
+| Logical model | Apple Silicon | Windows and Linux |
+|---|---|---|
+| Qwen3.5 9B | `mlx-community/Qwen3.5-9B-6bit` | `unsloth/Qwen3.5-9B-GGUF` → `Qwen3.5-9B-Q6_K.gguf` |
+| Qwen3.5 9B Compact | `mlx-community/Qwen3.5-9B-4bit` | `unsloth/Qwen3.5-9B-GGUF` → `Qwen3.5-9B-Q4_K_M.gguf` |
+
+MLX and GGUF never appear in the interface. They are an implementation detail
+of the platform you happen to be on.
 
 ## Features
 
-- local Qwen inference using Apple MLX
-- agentic coding through OpenCode
-- persistent OpenCode Web interface
-- automatic background startup with `launchd`
+- one command for setup, configuration, status, diagnostics and daily use
+- an interactive menu, so normal use needs no command-line flags
+- model management: install, list, switch, delete, disk usage
+- keep-model-in-RAM as a first-class setting, with idle unloading as the
+  alternative
+- persistent background services through launchd, NSSM or systemd
+- OpenCode terminal interface and OpenCode Web, both against the local model
+- isolated OpenCode configuration that allows only the local provider
 - generated password for remote Web UI access
-- menu-driven setup and configuration
-- isolated OpenCode configuration
-- configurable model, context size and output-token limit
-- configurable OpenCode Web port
-- optional idle model eviction
+- configurable context size, output limit, ports and bind addresses
 - optional web search and web fetching
 - optional ego lite browser automation
-- built-in status, testing, restart and uninstall
+- real diagnostics, including an actual inference request
+- uninstall that keeps your downloaded models unless you say otherwise
 
 ## Usage
 
-For terminal use, open a repository and start `local-ai`:
+Open a repository and run MyAI:
 
 ```bash
 cd ~/source/repos/my-project
-local-ai
+myai
 ```
 
-The menu is:
+That opens the menu:
 
 ```text
-LOCAL AI · MAC MINI
-OpenCode + mlx-serve + MLX
+MYAI
+local coding agent  ·  darwin/arm64
 
- 1  Launch OpenCode
- 2  OpenCode Web access
- 3  Install / update
- 4  Configure
- 5  Status
- 6  Test
- 7  Restart services
- 8  Uninstall
- 9  Quit
+  1  OpenCode
+  2  OpenCode Web
+  3  Models
+  4  Runtime
+  5  Configure
+  6  Status
+  7  Test
+  8  Install / update
+  9  Restart services
+ 10  Uninstall
+ 11  Quit
 ```
 
-Choose **Launch OpenCode** to start the terminal interface in the current directory.
+Choose **OpenCode** to start the terminal interface in the current directory.
 
-You can also launch it directly:
+Everything in the menu is also a command:
 
 ```bash
-local-ai opencode
+myai status             # what is installed, running and loaded
+myai test               # run the built-in checks
+myai web                # Web UI address, username and password
+myai opencode           # launch OpenCode here
+myai models             # list models
+myai restart            # restart the background services
 ```
 
-For browser access from another machine:
+`myai status` reports the MyAI and OpenCode versions, the inference backend,
+the active model, whether that model is currently in memory, the keep-in-RAM
+setting, the inference API and service, the OpenCode Web service and address,
+and the web search and browser automation settings.
 
-```bash
-local-ai web
-```
+`myai test` checks the real thing rather than the presence of files. It
+verifies that the backend is installed, that the service is running, that the
+API answers, that the active model is downloaded and actually being served,
+that a small inference completes correctly, that OpenCode is installed, that
+the managed configuration is still pinned to the local model, and that
+OpenCode Web responds to an authenticated request.
 
-This prints the current Web UI URL, username and generated password.
-
-Quick status:
-
-```bash
-local-ai status
-```
-
-Run the built-in checks:
-
-```bash
-local-ai test
-```
-
-## OpenCode Web
-
-OpenCode Web runs continuously as a per-user LaunchAgent.
-
-Default port:
+## Model management
 
 ```text
-4096
+MYAI · Models
+
+  1  Installed models
+  2  Install model
+  3  Select active model
+  4  Delete model
+  5  Disk usage
+  6  Back
 ```
 
-The service binds to `0.0.0.0` so it can be reached through a LAN or overlay network such as NetBird. `local-ai web` prefers a `100.64.0.0/10` overlay address when it finds one and otherwise falls back to the Mac's primary network address.
-
-Access details:
+Or from the command line:
 
 ```bash
-local-ai web
+myai models list
+myai models install qwen3.5-9b
+myai models select qwen3.5-9b-compact
+myai models delete unsloth/Qwen3.5-9B-GGUF/Qwen3.5-9B-Q6_K.gguf
+myai models usage
 ```
 
-Example:
+A model that is already downloaded is never fetched again, and MyAI checks
+free disk space before starting a download. Interrupted downloads resume.
+
+Deleting the model that is currently active has to be confirmed explicitly,
+because it leaves nothing for the backend to serve.
+
+You can also give a model reference directly, in the form `org/repo`,
+`org/repo:QUANT` or `org/repo/file.gguf`, for models outside the catalog.
+
+Models are stored in the place the backend expects:
+
+| Platform | Location |
+|---|---|
+| macOS | `~/.mlx-serve/models`, shared with mlx-serve |
+| Linux | `~/.local/share/myai/models` |
+| Windows | `%LOCALAPPDATA%\MyAI\data\models` |
+
+## Platform support
+
+| Platform | Backend | Services | Notes |
+|---|---|---|---|
+| macOS Apple Silicon | mlx-serve, Metal | launchd LaunchAgents | mlx-serve comes from Homebrew |
+| Windows x64 | llama.cpp, Vulkan or CUDA or CPU | NSSM | fully native, no WSL |
+| Windows ARM64 | llama.cpp, CPU or CUDA | NSSM | NSSM itself is x64 and runs under emulation |
+| Linux x64 | llama.cpp, Vulkan or CPU | systemd user units | |
+| Linux ARM64 | llama.cpp, CPU | systemd user units | |
+
+MyAI installs the official prebuilt llama.cpp and OpenCode binaries for your
+platform. On x64 machines it picks a Vulkan build by default, checks that it
+actually runs, and falls back to the portable CPU build if it does not.
+
+Intel Macs are not supported: MLX needs Apple Silicon.
+
+## Installation
+
+Download the binary for your platform from the releases page, then:
+
+```bash
+./myai install
+```
+
+Or build from source, which needs Go 1.23 or newer:
+
+```bash
+git clone https://github.com/Carlboms-Data-AB/myai.git
+cd myai
+make build
+./myai install
+```
+
+`myai install` installs the inference backend, OpenCode, the active model, the
+background services and the `myai` command itself, and it puts the command on
+your PATH. It is idempotent: anything already present is left alone.
+
+To update later without touching models:
+
+```bash
+myai upgrade
+```
+
+Upgrading from the earlier `local-ai` Bash version happens automatically on
+first run. MyAI imports the model, ports, limits and tool settings, keeps the
+existing Web UI password so saved logins still work, stops the old
+LaunchAgents so they do not hold the ports, and leaves every downloaded model
+exactly where it is.
+
+## Configuration and services
+
+Configuration lives in one file:
+
+| Platform | Path |
+|---|---|
+| macOS and Linux | `~/.config/myai/config.toml` |
+| Windows | `%APPDATA%\MyAI\config.toml` |
+
+```toml
+active_model = "qwen3.5-9b"
+backend = "auto"
+
+[inference]
+host = "127.0.0.1"
+port = 11234
+context = 131072
+output = 16384
+keep_in_ram = true
+idle_unload_minutes = 0
+
+[runtime]
+acceleration = "auto"
+
+[web]
+enabled = true
+host = "0.0.0.0"
+port = 4096
+username = "opencode"
+
+[tools]
+web_search = true
+browser_automation = false
+```
+
+Everything here is reachable from the **Runtime** and **Configure** menus. A
+change is written, the OpenCode configuration is regenerated and the services
+restart, in that order.
+
+### Keeping the model in RAM
+
+`keep_in_ram = true` is the default. The model is warmed when the backend
+starts and stays resident, so the first request of the day is as fast as the
+rest.
+
+Turning it off enables `idle_unload_minutes`. What that does depends on the
+backend, and MyAI is explicit about the difference:
+
+- **mlx-serve** unloads idle models natively, through `--idle-evict-secs`.
+- **llama.cpp** puts the server to sleep through `--sleep-idle-seconds`. The
+  endpoint stays up and the model reloads on the next request. Older
+  llama.cpp builds do not have this option; when that is the case MyAI says so
+  in `myai status` instead of pretending the setting works.
+
+MyAI never stops the inference service on idle, because that would take the
+API away from a running OpenCode session.
+
+### Background services
+
+Two services are managed:
+
+| Platform | Inference | OpenCode Web |
+|---|---|---|
+| macOS | `se.carlbomsdata.myai` | `se.carlbomsdata.myai-opencode` |
+| Windows | `MyAI` | `MyAI-OpenCode` |
+| Linux | `myai.service` | `myai-opencode.service` |
+
+On macOS and Linux they run as your own user and start when you log in. On
+Windows, NSSM registers them as native services; MyAI sets them to run as your
+account rather than LocalSystem, which is why installing them asks for your
+Windows password and needs an elevated prompt. The password goes to the
+service manager and is never stored by MyAI.
+
+Logs are in `~/.local/state/myai/logs` on macOS and Linux, and in
+`%LOCALAPPDATA%\MyAI\state\logs` on Windows.
+
+### OpenCode configuration
+
+MyAI writes its own OpenCode configuration and points OpenCode at it with
+`OPENCODE_CONFIG` and `OPENCODE_CONFIG_CONTENT`. Your personal
+`~/.config/opencode/opencode.json` is never touched.
+
+Both variables are set deliberately. OpenCode merges configuration from
+several places, and setting the inline copy as well means a repository's own
+`opencode.json` cannot override the provider and send your work to a cloud
+model.
+
+### OpenCode Web
+
+The Web UI binds to `0.0.0.0:4096` by default so it can be reached over a LAN
+or an overlay network. `myai web` prints the address, preferring an overlay
+address in `100.64.0.0/10` when it finds one:
 
 ```text
 OpenCode Web
 
-  URL                http://100.x.x.x:4096
-  username           opencode
-  password           <generated password>
+  URL                    http://100.x.x.x:4096
+  username               opencode
+  password               <generated>
+  state                  running
 ```
 
-The password is generated during installation and stored locally with mode `600` in:
-
-```text
-~/.config/local-ai-mac-mini/web-auth
-```
-
-OpenCode uses HTTP Basic Authentication. The username defaults to `opencode`.
-
-The Web UI uses the same managed local Qwen/MLX configuration as terminal sessions started through `local-ai`.
-
-## Configuration
-
-The managed configuration lives in:
-
-```text
-~/.config/local-ai-mac-mini/
-├── config
-├── opencode.json
-└── web-auth
-```
-
-`local-ai` uses `OPENCODE_CONFIG` and a matching runtime override instead of replacing your normal:
-
-```text
-~/.config/opencode/opencode.json
-```
-
-Existing OpenCode providers and personal configuration are therefore left alone. OpenCode launched through `local-ai`, including the persistent Web UI, allowlists only the local `mlx` provider, so it cannot silently switch to a cloud LLM because of another OpenCode configuration.
-
-The Configure menu can change:
-
-- model
-- context size
-- output-token limit
-- web tools
-- ego-browser integration
-- local MLX API port
-- OpenCode Web port
-- idle model eviction
-
-Default values:
-
-```text
-Model:          mlx-community/Qwen3.5-9B-6bit
-Context:        131072
-Output tokens:  16384
-MLX API:        127.0.0.1:11234
-OpenCode Web:   0.0.0.0:4096
-Web tools:      enabled
-Idle eviction:  off
-```
-
-## Install
-
-Requirements:
-
-- Apple Silicon Mac
-- Homebrew
-- macOS compatible with the current `mlx-serve` release
-
-Clone the repository and run the setup script:
-
-```bash
-git clone https://github.com/Carlboms-Data-AB/local-ai-mac-mini.git
-cd local-ai-mac-mini
-./setup.sh
-```
-
-The installer opens the menu. Choose **Install / update**.
-
-It installs or configures:
-
-- `mlx-serve`
-- OpenCode
-- `mlx-community/Qwen3.5-9B-6bit`
-- a dedicated OpenCode configuration for this stack
-- a `launchd` service for `mlx-serve`
-- a `launchd` service for OpenCode Web
-- password-protected remote Web UI access
-- the `local-ai` management command
-
-After installation:
-
-```bash
-local-ai
-```
-
-If the command is not visible in the shell that ran the installer yet:
-
-```bash
-source ~/.zshrc
-```
-
-## Background services
-
-The installer creates two LaunchAgents:
-
-```text
-~/Library/LaunchAgents/se.carlbomsdata.local-ai-mlx-serve.plist
-~/Library/LaunchAgents/se.carlbomsdata.local-ai-opencode-web.plist
-```
-
-The MLX service runs approximately:
-
-```bash
-mlx-serve \
-  --serve \
-  --model-dir ~/.mlx-serve/models \
-  --host 127.0.0.1 \
-  --port 11234
-```
-
-The OpenCode service runs approximately:
-
-```bash
-opencode web \
-  --hostname 0.0.0.0 \
-  --port 4096
-```
-
-Its environment contains the managed OpenCode configuration and the locally generated Web UI credentials.
-
-The model is loaded on demand. If idle eviction is enabled in **Configure**, the model is unloaded after the configured idle period.
-
-These are per-user LaunchAgents. They start automatically when that macOS user session is logged in; they are not pre-login system daemons.
-
-You do not need to run either service manually.
-
-Logs are stored in:
-
-```text
-~/.local/state/local-ai-mac-mini/
-```
-
-## Web search
-
-Web tools are enabled by default.
-
-When OpenCode is launched through `local-ai`, including OpenCode Web, the launcher sets:
-
-```text
-OPENCODE_ENABLE_EXA=1
-```
-
-The managed OpenCode config also permits:
-
-- `websearch`
-- `webfetch`
-
-The LLM inference remains local, but web searches are sent to Exa and `webfetch` contacts the requested website.
-
-Disable web tools from:
-
-```text
-local-ai → Configure → Web tools
-```
-
-## Browser automation with ego lite
-
-Browser automation is optional and disabled by default.
-
-Enable it from:
-
-```text
-local-ai → Configure → Browser automation
-```
-
-The setup installs the `ego-browser` skill with:
-
-```bash
-npx skills add citrolabs/ego-lite
-```
-
-ego lite also requires its macOS application and one-time GUI onboarding. The browser integration is intentionally opt-in because it can use real browser state and authenticated sessions.
-
-## Test
-
-Choose:
-
-```text
-local-ai → Test
-```
-
-The test checks:
-
-- `mlx-serve`
-- the MLX LaunchAgent
-- the local MLX API
-- the configured model
-- OpenCode
-- the managed OpenCode config
-- the OpenCode Web LaunchAgent
-- authenticated access to OpenCode Web
-- a small local inference request
-- web/ego configuration
-
-## Update
-
-To apply a newer version of this repository:
-
-```bash
-cd ~/source/repos/local-ai-mac-mini
-git pull
-./setup.sh
-```
-
-Choose **Install / update**. The updated script is copied into the installed `local-ai` command and both background services are recreated.
-
-The installer is idempotent. Existing downloaded models and already installed programs are reused. The local configuration is kept separately so replacing `setup.sh` does not reset your choices.
-
-## Uninstall
-
-Choose:
-
-```text
-local-ai → Uninstall
-```
-
-This removes only the files managed by this project:
-
-- both LaunchAgents
-- its OpenCode configuration
-- its local configuration and generated Web UI credentials
-- its logs
-- its `~/.zshrc` PATH block, if one was added
-- the `local-ai` command
-
-It deliberately keeps:
-
-- downloaded MLX models
-- `mlx-serve`
-- OpenCode
-- ego lite / ego-browser
-
-Uninstalling `local-ai` therefore does **not** delete the downloaded Qwen model.
-
-## Migrating from an earlier manual setup
-
-The managed installer uses different paths from an earlier manual setup:
-
-```text
-Managed MLX LaunchAgent:
-~/Library/LaunchAgents/se.carlbomsdata.local-ai-mlx-serve.plist
-
-Managed OpenCode Web LaunchAgent:
-~/Library/LaunchAgents/se.carlbomsdata.local-ai-opencode-web.plist
-
-Managed OpenCode config:
-~/.config/local-ai-mac-mini/opencode.json
-```
-
-If the older `se.carlbomsdata.mlx-serve` LaunchAgent is loaded, the installer stops it before starting the managed services. It leaves the old plist and normal global OpenCode config untouched so they can be removed only after the new stack has been tested.
-
-A manually started `mlx-serve` process on the configured port is also detected. In an interactive install, the setup offers to stop it.
-
-## Files
-
-| File | Role |
-|---|---|
-| `setup.sh` | installer, configuration UI and local management command |
-| `README.md` | project overview, installation and usage |
-| `.gitattributes` | cross-platform line-ending policy |
-| `.gitignore` | repository-local ignore rules |
+Authentication is OpenCode's own, through `OPENCODE_SERVER_USERNAME` and
+`OPENCODE_SERVER_PASSWORD`. This is the official OpenCode Web interface; MyAI
+adds no web frontend of its own.
+
+### Web search and browser automation
+
+Web tools are on by default. When they are, MyAI sets `OPENCODE_ENABLE_EXA=1`
+and allows the `websearch` and `webfetch` tools. Inference stays local, but
+searches go to Exa and fetches reach the site being requested. Turn them off
+in **Configure**.
+
+Browser automation is off by default and installs the `ego-browser` skill when
+you enable it. It is opt-in because it drives a real browser with real
+signed-in sessions.
 
 ## Security
 
-- `mlx-serve` binds to `127.0.0.1`, not the LAN.
-- OpenCode Web requires a generated password for network access.
-- Web UI credentials are stored only in the local user configuration with mode `600`.
-- OpenCode configuration is isolated from the user's normal global config.
-- Web access is explicit and can be disabled.
-- Browser automation is opt-in.
-- The installer does not modify SSH, GPG, Git remotes or Git configuration.
+- the inference API binds to `127.0.0.1` and is never exposed to the network
+- OpenCode Web refuses to start without a password when it is bound beyond
+  loopback
+- the Web UI password is generated with 18 bytes of cryptographic randomness
+- credentials are stored only in the local configuration directory, mode `600`
+  on macOS and Linux and restricted to your account on Windows
+- credentials are never written into a launch agent, a systemd unit or the
+  Windows service registry: the web service runs `myai serve-web`, which reads
+  them from the protected file itself
+- the managed OpenCode configuration allows exactly one provider, the local one
+- Windows services run as your account, not LocalSystem
+- MyAI does not modify SSH, GPG, Git remotes or Git configuration
+
+## Uninstall
+
+```text
+MYAI · Uninstall
+
+  1  Uninstall MyAI
+     Keep downloaded models
+  2  Uninstall MyAI and delete models
+  3  Delete downloaded models only
+  4  Cancel
+```
+
+Or:
+
+```bash
+myai uninstall                  # removes MyAI, keeps models
+myai uninstall --with-models    # removes MyAI and the models
+myai uninstall --models-only    # removes only the models
+```
+
+The default keeps your models. MyAI shows exactly what it will remove and what
+it will keep before it does anything, and deleting models requires typing a
+confirmation phrase, because they are large and slow to replace.
+
+Uninstalling removes the services, the configuration, the credentials, the
+logs, the tools MyAI downloaded, the PATH entry it added and the `myai`
+command. It leaves anything you installed yourself, such as a Homebrew
+mlx-serve or an OpenCode already on your PATH.
+
+## Files
+
+| Path | Role |
+|---|---|
+| `cmd/myai` | command entry point |
+| `internal/app` | the core: every operation, with no user interface |
+| `internal/cli`, `internal/ui` | the terminal interface |
+| `internal/backend` | mlx-serve and llama.cpp adapters |
+| `internal/service` | launchd, NSSM and systemd adapters |
+| `internal/catalog`, `internal/models` | logical models and the artifacts on disk |
+| `internal/opencode` | OpenCode configuration, launching and the Web service |
+
+The core has no user interface of its own. `internal/app` returns structured
+results and reports progress through an interface, so the terminal interface is
+one caller among possible others.
