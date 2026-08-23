@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Carlboms-Data-AB/myai/internal/run"
 	"github.com/Carlboms-Data-AB/myai/internal/service"
@@ -26,6 +27,9 @@ type Manager struct {
 	UID int
 	// Runner executes launchctl and plutil.
 	Runner run.Runner
+	// Sleep waits between load attempts. Tests replace it so they do not have
+	// to wait for a state that will never change.
+	Sleep func(time.Duration)
 }
 
 // New returns a Manager writing agents into dir.
@@ -78,16 +82,49 @@ func (m *Manager) Install(ctx context.Context, spec service.Spec) error {
 
 	// Booting out first makes a reinstall pick up the new definition.
 	m.bootout(ctx, spec.Name)
+	return m.load(ctx, spec.Name, path)
+}
 
-	if _, err := m.Runner.Run(ctx, run.Spec{Name: "launchctl", Args: []string{"bootstrap", m.domain(), path}}); err != nil {
-		// If it is loaded anyway, the definition is in place and all that is
-		// left is to make the running job pick it up.
-		if m.loaded(ctx, spec.Name) {
-			return m.kickstart(ctx, spec.Name)
+// load gets the job running from its current definition.
+//
+// launchctl is asynchronous: bootout returns before the job is gone, so a
+// bootstrap that follows too closely fails with "Bootstrap failed: 5", and a
+// kickstart during the same window fails with 37, "Operation already in
+// progress". Both are transient, so this retries through them and only
+// reports a failure that persists.
+func (m *Manager) load(ctx context.Context, name, path string) error {
+	var lastErr error
+
+	for attempt := 0; attempt < loadAttempts; attempt++ {
+		if attempt > 0 {
+			m.sleep(loadInterval)
 		}
-		return fmt.Errorf("load %s: %w", spec.Name, err)
+
+		_, err := m.Runner.Run(ctx, run.Spec{Name: "launchctl", Args: []string{"bootstrap", m.domain(), path}})
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+
+		// Already loaded is fine, as long as the running job picks up the
+		// definition that was just written.
+		if m.loaded(ctx, name) {
+			if err := m.kickstart(ctx, name); err == nil {
+				return nil
+			} else {
+				lastErr = err
+			}
+		}
 	}
-	return nil
+	return fmt.Errorf("load %s: %w", name, lastErr)
+}
+
+func (m *Manager) sleep(d time.Duration) {
+	if m.Sleep != nil {
+		m.Sleep(d)
+		return
+	}
+	time.Sleep(d)
 }
 
 // loaded reports whether launchd currently knows the job. A successful print
@@ -131,8 +168,7 @@ func (m *Manager) Start(ctx context.Context, name string) error {
 	}
 	// Bootstrapping an already-loaded agent fails harmlessly, so the kickstart
 	// below is what actually guarantees it is running.
-	_, _ = m.Runner.Run(ctx, run.Spec{Name: "launchctl", Args: []string{"bootstrap", m.domain(), path}})
-	return m.kickstart(ctx, name)
+	return m.load(ctx, name, path)
 }
 
 // Stop unloads the agent. The plist stays on disk so it can be started again.
@@ -145,6 +181,12 @@ func (m *Manager) Stop(ctx context.Context, name string) error {
 func (m *Manager) Restart(ctx context.Context, name string) error {
 	return m.Start(ctx, name)
 }
+
+// launchctl settles asynchronously, so loading retries briefly.
+const (
+	loadAttempts = 5
+	loadInterval = 400 * time.Millisecond
+)
 
 var (
 	statePattern = regexp.MustCompile(`state\s*=\s*(\S+)`)

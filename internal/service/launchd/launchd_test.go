@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Carlboms-Data-AB/myai/internal/run"
 	"github.com/Carlboms-Data-AB/myai/internal/service"
@@ -202,6 +203,12 @@ func TestStopLeavesPlistInPlace(t *testing.T) {
 	}
 }
 
+// noWait removes the retry delay so tests do not sit through it.
+func noWait(m *Manager) *Manager {
+	m.Sleep = func(time.Duration) {}
+	return m
+}
+
 func TestInstallSurvivesAJobThatIsStillLoaded(t *testing.T) {
 	// launchctl bootout returns before the job is gone, so bootstrap can fail
 	// with "Bootstrap failed: 5". That is not a real failure: the definition
@@ -211,7 +218,7 @@ func TestInstallSurvivesAJobThatIsStillLoaded(t *testing.T) {
 	fake.Respond("launchctl print", "state = running\npid = 4242")
 	fake.Fail("launchctl bootstrap", errors.New("exit status 5: Bootstrap failed: 5: Input/output error"))
 
-	m := New(filepath.Join(dir, "LaunchAgents"), 501, fake)
+	m := noWait(New(filepath.Join(dir, "LaunchAgents"), 501, fake))
 	if err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
@@ -227,8 +234,66 @@ func TestInstallReportsARealBootstrapFailure(t *testing.T) {
 	fake.Fail("launchctl bootstrap", errors.New("exit status 5"))
 	fake.Fail("launchctl print", errors.New("could not find service"))
 
-	m := New(filepath.Join(dir, "LaunchAgents"), 501, fake)
+	m := noWait(New(filepath.Join(dir, "LaunchAgents"), 501, fake))
 	if err := m.Install(context.Background(), sampleSpec(dir)); err == nil {
 		t.Fatal("expected the failure to be reported")
+	}
+}
+
+func TestLoadRetriesThroughLaunchdsTransientStates(t *testing.T) {
+	// The real failure on a Mac: bootout has not finished, so bootstrap
+	// returns 5 and kickstart returns 37, "Operation already in progress".
+	// Both clear on their own within a moment.
+	dir := t.TempDir()
+	fake := run.NewFake()
+	fake.Respond("launchctl print", "state = running")
+	fake.Fail("launchctl bootstrap", errors.New("exit status 5: Bootstrap failed: 5: Input/output error"))
+	fake.Fail("launchctl kickstart", errors.New("exit status 37"))
+
+	attempts := 0
+	m := New(filepath.Join(dir, "LaunchAgents"), 501, fake)
+	m.Sleep = func(time.Duration) {
+		attempts++
+		if attempts >= 2 {
+			// launchd settles: bootstrap starts working.
+			delete(fake.Errors, "launchctl bootstrap")
+		}
+	}
+
+	if err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
+		t.Fatalf("Install should have recovered: %v", err)
+	}
+}
+
+func TestLoadGivesUpOnAPersistentFailure(t *testing.T) {
+	dir := t.TempDir()
+	fake := run.NewFake()
+	fake.Fail("launchctl bootstrap", errors.New("exit status 5"))
+	fake.Fail("launchctl print", errors.New("could not find service"))
+
+	m := noWait(New(filepath.Join(dir, "LaunchAgents"), 501, fake))
+	err := m.Install(context.Background(), sampleSpec(dir))
+	if err == nil {
+		t.Fatal("a failure that never clears must be reported")
+	}
+	if !strings.Contains(err.Error(), "se.carlbomsdata.myai") {
+		t.Errorf("err = %v, want it to name the service", err)
+	}
+}
+
+func TestLoadReportsTheKickstartFailureWhenThatIsWhatPersists(t *testing.T) {
+	dir := t.TempDir()
+	fake := run.NewFake()
+	fake.Respond("launchctl print", "state = running")
+	fake.Fail("launchctl bootstrap", errors.New("exit status 5"))
+	fake.Fail("launchctl kickstart", errors.New("exit status 37"))
+
+	m := noWait(New(filepath.Join(dir, "LaunchAgents"), 501, fake))
+	err := m.Install(context.Background(), sampleSpec(dir))
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), "37") {
+		t.Errorf("err = %v, want the persistent failure", err)
 	}
 }
