@@ -67,7 +67,7 @@ func (Exec) Run(ctx context.Context, spec Spec) (Result, error) {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		err := cmd.Run()
-		return Result{ExitCode: cmd.ProcessState.ExitCode()}, err
+		return Result{ExitCode: exitCode(cmd)}, err
 	}
 
 	if spec.Stdin != "" {
@@ -103,11 +103,14 @@ func (Exec) Run(ctx context.Context, spec Spec) (Result, error) {
 	return result(&buf, cmd, err)
 }
 
+// exitCode reports a command's exit status. A command that never started has
+// no ProcessState, which ExitCode reports as -1.
+func exitCode(cmd *exec.Cmd) int {
+	return cmd.ProcessState.ExitCode()
+}
+
 func result(buf *bytes.Buffer, cmd *exec.Cmd, err error) (Result, error) {
-	res := Result{Output: buf.String()}
-	if cmd.ProcessState != nil {
-		res.ExitCode = cmd.ProcessState.ExitCode()
-	}
+	res := Result{Output: buf.String(), ExitCode: exitCode(cmd)}
 	if err != nil {
 		return res, fmt.Errorf("%s: %w: %s", cmd.Path, err, strings.TrimSpace(trim(res.Output)))
 	}

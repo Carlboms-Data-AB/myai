@@ -3,6 +3,7 @@ package run
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -104,5 +105,30 @@ func TestFakeStreamsConfiguredOutput(t *testing.T) {
 	}
 	if len(lines) != 2 || lines[1] != "done" {
 		t.Errorf("lines = %v", lines)
+	}
+}
+
+func TestInteractiveCommandThatCannotStartReturnsAnError(t *testing.T) {
+	// A missing executable leaves ProcessState nil. Dereferencing it would
+	// panic instead of reporting the problem.
+	res, err := Exec{}.Run(context.Background(), Spec{
+		Name:        filepath.Join(t.TempDir(), "no-such-binary"),
+		Interactive: true,
+	})
+	if err == nil {
+		t.Fatal("expected an error for a missing executable")
+	}
+	if res.ExitCode != -1 {
+		t.Errorf("ExitCode = %d, want -1 for a command that never ran", res.ExitCode)
+	}
+}
+
+func TestCommandThatCannotStartReturnsAnError(t *testing.T) {
+	res, err := Exec{}.Run(context.Background(), Spec{Name: filepath.Join(t.TempDir(), "no-such-binary")})
+	if err == nil {
+		t.Fatal("expected an error for a missing executable")
+	}
+	if res.ExitCode > 0 {
+		t.Errorf("ExitCode = %d", res.ExitCode)
 	}
 }
