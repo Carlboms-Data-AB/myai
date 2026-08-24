@@ -65,10 +65,16 @@ password when it does.
 You choose a model by name. MyAI resolves that name to whichever artifact your
 platform actually needs:
 
-| Logical model | Apple Silicon | Windows and Linux |
-|---|---|---|
-| Qwen3.5 9B | `mlx-community/Qwen3.5-9B-6bit` | `unsloth/Qwen3.5-9B-GGUF` → `Qwen3.5-9B-Q6_K.gguf` |
-| Qwen3.5 9B Compact | `mlx-community/Qwen3.5-9B-4bit` | `unsloth/Qwen3.5-9B-GGUF` → `Qwen3.5-9B-Q4_K_M.gguf` |
+| Logical model | Needs | Apple Silicon | Windows and Linux |
+|---|---|---|---|
+| Qwen3.5 9B | 16 GB RAM | `mlx-community/Qwen3.5-9B-6bit` | `unsloth/Qwen3.5-9B-GGUF` → `Qwen3.5-9B-Q6_K.gguf` |
+| Qwen3.5 9B Compact | 12 GB RAM | `mlx-community/Qwen3.5-9B-4bit` | `unsloth/Qwen3.5-9B-GGUF` → `Qwen3.5-9B-Q4_K_M.gguf` |
+| Qwen3 0.6B | 4 GB RAM | `mlx-community/Qwen3-0.6B-4bit` | `unsloth/Qwen3-0.6B-GGUF` → `Qwen3-0.6B-Q4_K_M.gguf` |
+
+Qwen3.5 9B is the one to use for real work. The Compact variant is the same
+model squeezed smaller for machines with less memory. Qwen3 0.6B is not a
+serious coding model; it downloads in seconds and proves the installation
+works.
 
 You never have to choose between MLX and GGUF, or know which one your machine
 needs. MyAI picks the artifact that matches the backend it will actually be
@@ -77,6 +83,7 @@ loaded by, and shows you the name it settled on.
 ## Features
 
 - one command for setup, configuration, status, diagnostics and daily use
+- updates itself from the published releases, with checksums verified
 - an interactive menu, so normal use needs no command-line flags
 - model management: install, list, switch, delete, disk usage
 - keep-model-in-RAM as a first-class setting, with idle unloading as the
@@ -270,15 +277,26 @@ make build
 ./myai install
 ```
 
-`myai install` installs the inference backend, OpenCode, the active model, the
-background services and the `myai` command itself, and it puts the command on
-your PATH. It is idempotent: anything already present is left alone.
+`myai install` asks which model you want, showing what each is for and how
+much memory it needs, then installs the inference backend, OpenCode, the model
+you chose, the background services and the `myai` command itself, and puts the
+command on your PATH. Pick several if you like; the first becomes the active
+one and you can switch later under **Models**.
 
-To update later without touching models:
+It is idempotent: anything already present is left alone, and a model you
+already have is never downloaded again.
+
+To update later:
 
 ```bash
 myai upgrade
 ```
+
+That downloads the newest release, checks it against the published checksums,
+replaces the `myai` command and refreshes the services. It never touches
+models, and it will not replace a build newer than the latest release. Only
+the services a change actually affects are restarted, so updating does not
+interrupt an OpenCode session that did not need interrupting.
 
 Upgrading from the earlier `local-ai` Bash version happens automatically the
 first time you install. MyAI imports the model, ports, limits and tool settings, keeps the
@@ -345,6 +363,11 @@ backend, and MyAI is explicit about the difference:
 
 MyAI never stops the inference service on idle, because that would take the
 API away from a running OpenCode session.
+
+Restarting the services loads the active model, because the context a backend
+serves can only be read once weights are in memory, and OpenCode has to be
+told a figure it can actually use. On a machine with `keep_in_ram` off, this
+means a restart loads the model even though normal use would not have yet.
 
 ### When the backend refuses to load a model
 
