@@ -144,7 +144,7 @@ func TestUninstallRemovesThePathBlockOnly(t *testing.T) {
 	if err := os.WriteFile(profile, []byte("export EDITOR=vim\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.InstallCommand(); err != nil {
+	if _, err := a.InstallCommand(); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Uninstall(context.Background(), UninstallKeepModels); err != nil {

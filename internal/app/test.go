@@ -109,11 +109,18 @@ func (a *App) Test(ctx context.Context) TestReport {
 	}
 
 	if apiUp && modelErr == nil {
-		if served, ok := client.ContextLength(ctx, b.ModelName(model)); ok {
-			detail := fmt.Sprintf("%d tokens, and OpenCode is told %d", served, a.cfg.Inference.Context)
-			add("context window", served >= a.cfg.Inference.Context, detail)
-		} else {
+		served, ok := client.ContextLength(ctx, b.ModelName(model))
+		advertised, err := opencode.AdvertisedContext(a.env.OpenCodeConfigFile(), b.ModelName(model))
+		switch {
+		case !ok:
 			skip("context window", "the server does not report a context window")
+		case err != nil:
+			add("context window", false, err.Error())
+		default:
+			// What matters is that OpenCode is not told more than the server
+			// will actually serve, not what the configuration asked for.
+			detail := fmt.Sprintf("serving %d tokens, OpenCode told %d", served, advertised)
+			add("context window", advertised <= served, detail)
 		}
 	} else {
 		skip("context window", "the inference API is not answering")

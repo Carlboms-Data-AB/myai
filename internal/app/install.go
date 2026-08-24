@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -52,10 +53,13 @@ func (a *App) Install(ctx context.Context, opts InstallOptions) error {
 		return err
 	}
 
+	selfUpdated := false
 	if opts.SelfUpdate {
-		if _, err := a.SelfUpdate(ctx); err != nil {
+		result, err := a.SelfUpdate(ctx)
+		if err != nil {
 			a.reporter.Warn("could not check for a newer MyAI: " + err.Error())
 		}
+		selfUpdated = result.Updated
 	}
 
 	if err := a.MigrateFromPrototype(ctx); err != nil {
@@ -104,12 +108,17 @@ func (a *App) Install(ctx context.Context, opts InstallOptions) error {
 		}
 	}
 
-	if opts.Command && !opts.SelfUpdate {
-		// A self-update has already put the newest binary in place; copying
-		// the running one over it would undo that.
-		if err := a.InstallCommand(); err != nil {
+	commandChanged := selfUpdated
+	if opts.Command && !selfUpdated {
+		// Only skip this when a self-update actually replaced the binary;
+		// copying the running one over a newer release would undo it. When
+		// nothing was downloaded, the running binary is what should be
+		// installed, which is how a locally built MyAI takes effect.
+		changed, err := a.InstallCommand()
+		if err != nil {
 			return err
 		}
+		commandChanged = changed
 	}
 
 	if err := a.WriteOpenCodeConfig(ctx); err != nil {
@@ -122,10 +131,12 @@ func (a *App) Install(ctx context.Context, opts InstallOptions) error {
 			return err
 		}
 		// A fresh install has to start them; an upgrade only restarts what
-		// the new definitions actually changed.
+		// the new definitions changed. The web service runs the myai binary
+		// itself, so a new binary means it has to restart even though its
+		// definition is untouched.
 		if err := a.restartRoles(ctx,
 			changed[service.RoleInference] || !a.serviceRunning(ctx, service.RoleInference),
-			changed[service.RoleWeb] || !a.serviceRunning(ctx, service.RoleWeb),
+			changed[service.RoleWeb] || commandChanged || !a.serviceRunning(ctx, service.RoleWeb),
 		); err != nil {
 			return err
 		}
@@ -184,30 +195,49 @@ func (a *App) serviceRunning(ctx context.Context, role string) bool {
 }
 
 // InstallCommand copies the running binary to the MyAI bin directory and makes
-// sure that directory is on PATH.
-func (a *App) InstallCommand() error {
+// sure that directory is on PATH. It reports whether the installed binary
+// changed, because the services run it and have to be restarted when it does.
+func (a *App) InstallCommand() (bool, error) {
 	source := a.exe
 	if source == "" {
-		return errors.New("cannot locate the running myai executable")
+		return false, errors.New("cannot locate the running myai executable")
 	}
 	target := a.env.Executable()
 
 	sourceInfo, err := os.Stat(source)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if targetInfo, err := os.Stat(target); err == nil && os.SameFile(sourceInfo, targetInfo) {
-		return a.ensurePath()
+	if targetInfo, err := os.Stat(target); err == nil {
+		if os.SameFile(sourceInfo, targetInfo) {
+			return false, a.ensurePath()
+		}
+		if same, err := sameContents(source, target); err == nil && same {
+			return false, a.ensurePath()
+		}
 	}
 
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return err
+		return false, err
 	}
 	if err := copyExecutable(source, target); err != nil {
-		return err
+		return false, err
 	}
 	a.reporter.Info("installed the myai command at " + target)
-	return a.ensurePath()
+	return true, a.ensurePath()
+}
+
+// sameContents reports whether two files are byte-identical.
+func sameContents(a, b string) (bool, error) {
+	left, err := os.ReadFile(a)
+	if err != nil {
+		return false, err
+	}
+	right, err := os.ReadFile(b)
+	if err != nil {
+		return false, err
+	}
+	return bytes.Equal(left, right), nil
 }
 
 func copyExecutable(source, target string) error {

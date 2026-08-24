@@ -150,7 +150,7 @@ func TestInstallCommandCopiesBinaryAndSetsPath(t *testing.T) {
 	t.Setenv("SHELL", "/bin/zsh")
 	t.Setenv("PATH", "/usr/bin")
 
-	if err := a.InstallCommand(); err != nil {
+	if _, err := a.InstallCommand(); err != nil {
 		t.Fatalf("InstallCommand: %v", err)
 	}
 	if !fileExists(env.Executable()) {
@@ -177,7 +177,7 @@ func TestInstallCommandIsIdempotent(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin")
 
 	for i := 0; i < 3; i++ {
-		if err := a.InstallCommand(); err != nil {
+		if _, err := a.InstallCommand(); err != nil {
 			t.Fatalf("InstallCommand %d: %v", i, err)
 		}
 	}
@@ -309,5 +309,42 @@ func TestIsNewerRefusesToDowngrade(t *testing.T) {
 		if got := IsNewer(tt.release, tt.running); got != tt.want {
 			t.Errorf("IsNewer(%q, %q) = %v: %s", tt.release, tt.running, got, tt.why)
 		}
+	}
+}
+
+func TestInstallCommandReportsWhetherTheBinaryChanged(t *testing.T) {
+	// The services run this binary, so a caller has to know when it moved.
+	a, _, env := newTestApp(t, "linux", "amd64")
+	if err := a.env.EnsureDirs(); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SHELL", "/bin/zsh")
+	t.Setenv("PATH", env.Bin)
+
+	changed, err := a.InstallCommand()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Error("the first install puts a new binary in place")
+	}
+
+	changed, err = a.InstallCommand()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed {
+		t.Error("installing the same binary twice is not a change")
+	}
+
+	if err := os.WriteFile(a.exe, []byte("a different build"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	changed, err = a.InstallCommand()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Error("a different binary is a change")
 	}
 }
