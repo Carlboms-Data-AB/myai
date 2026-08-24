@@ -5,6 +5,7 @@ package hf
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -124,8 +125,19 @@ func (c *Client) Download(ctx context.Context, repo, file, dest string, r progre
 		resumeFrom = 0
 		flags |= os.O_TRUNC
 	case http.StatusRequestedRangeNotSatisfiable:
-		// The partial file is already the whole file.
-		return os.Rename(part, dest)
+		// The range was past the end of the file. That happens when the
+		// partial download is already complete, but also when it is larger
+		// than the file it came from, so the size has to be checked rather
+		// than assumed. Promoting a too-large file would install a corrupt
+		// model and report success.
+		remote, sizeErr := c.Size(ctx, repo, file)
+		if sizeErr == nil && remote > 0 && resumeFrom == remote {
+			return os.Rename(part, dest)
+		}
+		if err := os.Remove(part); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return fmt.Errorf("the partial download of %s/%s did not match the file on the server and was discarded; run the install again", repo, file)
 	default:
 		return fmt.Errorf("download %s/%s: %s", repo, file, resp.Status)
 	}

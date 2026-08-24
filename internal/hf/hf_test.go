@@ -228,3 +228,67 @@ func TestFilesListsRepositoryContents(t *testing.T) {
 		t.Errorf("Files = %v", got)
 	}
 }
+
+func TestDownloadCompletesWhenThePartialIsAlreadyWhole(t *testing.T) {
+	body := []byte(strings.Repeat("z", 800))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead {
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		// Asking for a range at the end of the file.
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+	}))
+	defer srv.Close()
+	t.Setenv("HF_ENDPOINT", srv.URL)
+
+	dest := filepath.Join(t.TempDir(), "model.gguf")
+	if err := os.WriteFile(dest+".part", body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := New().Download(context.Background(), "org/repo", "model.gguf", dest, nil); err != nil {
+		t.Fatalf("a complete partial should be accepted: %v", err)
+	}
+	got, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(body) {
+		t.Errorf("got %d bytes, want %d", len(got), len(body))
+	}
+}
+
+func TestDownloadDiscardsAPartialLargerThanTheRemoteFile(t *testing.T) {
+	// A corrupt or stale partial also produces 416. Treating it as complete
+	// would install a broken model and call it a success.
+	body := []byte(strings.Repeat("z", 800))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead {
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+	}))
+	defer srv.Close()
+	t.Setenv("HF_ENDPOINT", srv.URL)
+
+	dest := filepath.Join(t.TempDir(), "model.gguf")
+	oversized := append(body, []byte("extra rubbish")...)
+	if err := os.WriteFile(dest+".part", oversized, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := New().Download(context.Background(), "org/repo", "model.gguf", dest, nil)
+	if err == nil {
+		t.Fatal("expected the mismatched partial to be rejected")
+	}
+	if _, statErr := os.Stat(dest); !os.IsNotExist(statErr) {
+		t.Error("a corrupt partial must not become the destination file")
+	}
+	if _, statErr := os.Stat(dest + ".part"); !os.IsNotExist(statErr) {
+		t.Error("the corrupt partial should have been discarded")
+	}
+}
