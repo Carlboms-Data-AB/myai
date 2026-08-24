@@ -167,3 +167,15 @@ func TestWarmAsksForOneToken(t *testing.T) {
 		t.Errorf("max_tokens = %v, want 1", maxTokens)
 	}
 }
+
+func TestServingIgnoresTrivialSubstringMatches(t *testing.T) {
+	// A one or two character id must not match every reference.
+	c := fakeServer(t, modelsHandler("x", "ab"))
+	got, err := c.Serving(context.Background(), "mlx-community/Qwen3.5-9B-6bit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got {
+		t.Error("a trivial id should not count as serving the model")
+	}
+}

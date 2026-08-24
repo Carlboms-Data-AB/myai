@@ -236,6 +236,11 @@ func (b *Backend) ServiceSpec(ctx context.Context, p backend.SpecParams) (servic
 		return service.Spec{}, fmt.Errorf("llama.cpp is not installed")
 	}
 
+	if p.Model.Artifact.File == "" {
+		return service.Spec{}, fmt.Errorf(
+			"model %q does not name a GGUF file; set it through Models, or give a reference such as %s:Q6_K",
+			p.Model.Model.ID, p.Model.Artifact.Repo)
+	}
 	modelPath := b.Store().PathFor(p.Model)
 	args := []string{
 		"--model", modelPath,

@@ -119,7 +119,13 @@ func (c *Client) Serving(ctx context.Context, want string) (bool, error) {
 
 	for _, m := range models {
 		lower := strings.ToLower(m)
-		if lower == want || strings.Contains(lower, base) || strings.Contains(base, lower) {
+		if lower == want || strings.Contains(lower, base) {
+			return true, nil
+		}
+		// The server may advertise a shorter alias than the reference MyAI
+		// holds. Require enough of it to be meaningful, so a one or two
+		// character id does not match everything.
+		if len(lower) >= 4 && strings.Contains(base, lower) {
 			return true, nil
 		}
 	}

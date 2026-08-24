@@ -253,3 +253,26 @@ func TestVersionLine(t *testing.T) {
 		}
 	}
 }
+
+func TestServiceSpecRefusesAModelWithNoFile(t *testing.T) {
+	// Without a file the model path would be invented, and llama-server would
+	// be started against something that does not exist.
+	fake := run.NewFake().Respond("--help", helpWithSleep)
+	b, _ := newBackend(t, fake)
+
+	model, err := catalog.Resolve("unsloth/Some-GGUF", catalog.HostTarget("linux", "amd64"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = b.ServiceSpec(context.Background(), backend.SpecParams{
+		Config: config.Default(),
+		Model:  model,
+		Name:   "myai",
+	})
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), "Q6_K") {
+		t.Errorf("err = %v, want it to show how to name a quantization", err)
+	}
+}
