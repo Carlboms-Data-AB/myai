@@ -3,7 +3,9 @@
     {
       "id": "qwen3.5-9b",
       "name": "Qwen3.5 9B",
-      "summary": "Balanced quality and speed. The default MyAI coding model.",
+      "summary": "The default. Best coding quality of the three, and the one to pick if the machine has the memory for it.",
+      "goodAt": "Multi-file changes, following a plan, reading unfamiliar code, writing tests.",
+      "needsRAM": "16 GB or more",
       "context": 131072,
       "output": 16384,
       "artifacts": [
@@ -29,7 +31,9 @@
     {
       "id": "qwen3.5-9b-compact",
       "name": "Qwen3.5 9B Compact",
-      "summary": "Same model at a smaller quantization, for machines with less memory.",
+      "summary": "The same model compressed harder. Slightly weaker answers, noticeably smaller, and the one to use when memory is tight.",
+      "goodAt": "The same work as Qwen3.5 9B, with a little more supervision on long tasks.",
+      "needsRAM": "12 GB or more",
       "context": 131072,
       "output": 16384,
       "artifacts": [
@@ -49,6 +53,34 @@
           "file": "Qwen3.5-9B-Q4_K_M.gguf",
           "quant": "Q4_K_M",
           "size": 5680522464
+        }
+      ]
+    },
+    {
+      "id": "qwen3-0.6b",
+      "name": "Qwen3 0.6B",
+      "summary": "Tiny and fast. Not a serious coding model, but it downloads in seconds and proves the whole stack works.",
+      "goodAt": "Checking an installation, short questions, machines with very little memory.",
+      "needsRAM": "4 GB or more",
+      "context": 32768,
+      "output": 4096,
+      "artifacts": [
+        {
+          "os": ["darwin"],
+          "arch": ["arm64"],
+          "backend": "mlx-serve",
+          "repo": "mlx-community/Qwen3-0.6B-4bit",
+          "quant": "4-bit",
+          "size": 351400000
+        },
+        {
+          "os": ["windows", "linux", "darwin"],
+          "arch": ["amd64", "arm64"],
+          "backend": "llama.cpp",
+          "repo": "unsloth/Qwen3-0.6B-GGUF",
+          "file": "Qwen3-0.6B-Q4_K_M.gguf",
+          "quant": "Q4_K_M",
+          "size": 396705472
         }
       ]
     }

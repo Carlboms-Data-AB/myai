@@ -90,11 +90,7 @@ func (a *App) Install(ctx context.Context, opts InstallOptions) error {
 	}
 
 	if opts.Model {
-		model, err := a.ActiveModel()
-		if err != nil {
-			return err
-		}
-		if err := a.Backend().Store().Install(ctx, model, a.reporter); err != nil {
+		if err := a.installChosenModels(ctx); err != nil {
 			return err
 		}
 	}
@@ -118,6 +114,50 @@ func (a *App) Install(ctx context.Context, opts InstallOptions) error {
 		}
 	}
 	return nil
+}
+
+// ChooseModels is how a caller offers the model choice during install. It
+// receives what MyAI can install here and returns the ids to download, with
+// the first becoming the active model. Returning nothing means "keep whatever
+// is configured".
+type ChooseModels func(offered []ModelEntry) ([]string, error)
+
+// ModelChooser is consulted during install when it is set. Without one,
+// install downloads the configured model and asks nothing, which is what a
+// non-interactive run needs.
+func (a *App) SetModelChooser(choose ChooseModels) { a.chooseModels = choose }
+
+// installChosenModels downloads the models the operator picked, or the
+// configured one when there is nobody to ask.
+func (a *App) installChosenModels(ctx context.Context) error {
+	store := a.Backend().Store()
+
+	if a.chooseModels != nil {
+		offered := a.Offered(ctx)
+		chosen, err := a.chooseModels(offered)
+		if err != nil {
+			return err
+		}
+		if len(chosen) > 0 {
+			for _, id := range chosen {
+				resolved, err := a.resolveForStore(ctx, store, id)
+				if err != nil {
+					return err
+				}
+				if err := store.Install(ctx, resolved, a.reporter); err != nil {
+					return err
+				}
+			}
+			// The first pick becomes the active model.
+			return a.Update(func(c *config.Config) { c.ActiveModel = chosen[0] })
+		}
+	}
+
+	model, err := a.ActiveModel()
+	if err != nil {
+		return err
+	}
+	return store.Install(ctx, model, a.reporter)
 }
 
 // InstallCommand copies the running binary to the MyAI bin directory and makes

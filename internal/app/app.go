@@ -67,6 +67,7 @@ type App struct {
 	services     service.Manager
 	oc           *opencode.OpenCode
 	readyTimeout time.Duration
+	chooseModels ChooseModels
 }
 
 // DefaultReadyTimeout is how long MyAI waits for the inference API to answer

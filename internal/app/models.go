@@ -39,6 +39,10 @@ type ModelEntry struct {
 	Path string
 	// InCatalog reports whether MyAI ships this model.
 	InCatalog bool
+	// GoodAt says what the model is worth using for.
+	GoodAt string
+	// NeedsRAM is the memory it wants.
+	NeedsRAM string
 }
 
 // ModelsView is the full picture of models on this machine.
@@ -95,6 +99,8 @@ func (a *App) Models(ctx context.Context) (ModelsView, error) {
 			ID:        r.Model.ID,
 			Name:      r.Label(),
 			Summary:   r.Model.Summary,
+			GoodAt:    r.Model.GoodAt,
+			NeedsRAM:  r.Model.NeedsRAM,
 			Ref:       r.Ref(),
 			Backend:   r.Backend(),
 			Installed: byRef[r.Ref()],
@@ -109,6 +115,16 @@ func (a *App) Models(ctx context.Context) (ModelsView, error) {
 		view.FreeSpace = free
 	}
 	return view, nil
+}
+
+// Offered returns the models MyAI can install on this machine, with their
+// descriptions, for a caller that has to present a choice.
+func (a *App) Offered(ctx context.Context) []ModelEntry {
+	view, err := a.Models(ctx)
+	if err != nil {
+		return nil
+	}
+	return view.Available
 }
 
 // InstallModel downloads a model without changing which one is active.

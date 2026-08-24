@@ -26,6 +26,10 @@ type Model struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
 	Summary string `json:"summary"`
+	// GoodAt says what the model is worth using for, in plain terms.
+	GoodAt string `json:"goodAt"`
+	// NeedsRAM is the memory the model wants, for choosing sensibly.
+	NeedsRAM string `json:"needsRAM"`
 	// Context and Output are the limits advertised to OpenCode.
 	Context   int        `json:"context"`
 	Output    int        `json:"output"`

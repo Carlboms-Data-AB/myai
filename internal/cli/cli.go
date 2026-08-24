@@ -23,6 +23,11 @@ func Run(ctx context.Context, args []string) int {
 		console.Error(err)
 		return 1
 	}
+	if console.Interactive() {
+		// With somebody there to ask, install offers the model choice rather
+		// than silently downloading whatever happens to be configured.
+		instance.SetModelChooser(modelChooser(console))
+	}
 
 	command := ""
 	rest := []string(nil)
