@@ -221,3 +221,28 @@ func TestUnitPassesSystemdAnalyze(t *testing.T) {
 		t.Fatalf("systemd-analyze rejected the unit: %v\n%s\n%s", err, out, body)
 	}
 }
+
+func TestUnitEscapesPercentSoSystemdDoesNotExpandIt(t *testing.T) {
+	// systemd expands specifiers such as %i inside unit values, so a literal
+	// percent in a path or an environment value has to be doubled.
+	spec := service.Spec{
+		Name: "myai",
+		Exec: "/opt/my%dir/llama-server",
+		Args: []string{"--model", "/models/100%good.gguf"},
+		Env:  map[string]string{"NOTE": "50% done"},
+	}
+	got, err := Unit(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"my%%dir", "100%%good.gguf", "50%% done"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("unit should contain %q:\n%s", want, got)
+		}
+	}
+	// No single percent should survive.
+	stripped := strings.ReplaceAll(got, "%%", "")
+	if strings.Contains(stripped, "%") {
+		t.Errorf("an unescaped percent remains:\n%s", got)
+	}
+}

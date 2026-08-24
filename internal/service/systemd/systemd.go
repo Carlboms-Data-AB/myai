@@ -215,11 +215,13 @@ func commandLine(spec service.Spec) string {
 }
 
 // quote wraps a value in double quotes when systemd would otherwise split or
-// reinterpret it.
+// reinterpret it. A literal percent has to be doubled, because systemd expands
+// specifiers such as %i inside unit values.
 func quote(s string) string {
-	if s != "" && !strings.ContainsAny(s, " \t\"'\\$%") {
-		return s
+	escaped := strings.ReplaceAll(s, "%", "%%")
+	if escaped != "" && !strings.ContainsAny(escaped, " \t\"'\\$%") {
+		return escaped
 	}
 	replacer := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
-	return `"` + replacer.Replace(s) + `"`
+	return `"` + replacer.Replace(escaped) + `"`
 }
