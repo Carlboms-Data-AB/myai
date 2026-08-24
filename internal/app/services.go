@@ -257,18 +257,16 @@ func (a *App) restartAll(ctx context.Context, web bool) error {
 	} else {
 		a.reporter.Info("inference API ready at " + client.BaseURL)
 
-		// The context the server actually serves can only be read once it is
-		// up, and it is often smaller than asked for because the backend
-		// sizes it to the machine. Rewrite the OpenCode configuration now
-		// that there is something to ask, before the Web UI reads it.
+		// The context a backend serves depends on the model being loaded:
+		// mlx-serve reports one figure while idle and a smaller, memory-sized
+		// one once weights are in memory. Load the model, then read it, then
+		// write the OpenCode configuration, so OpenCode is never told more
+		// context than it can actually use.
+		if err := a.WarmModel(ctx); err != nil {
+			a.reporter.Warn("could not load the model to measure its context: " + err.Error())
+		}
 		if err := a.WriteOpenCodeConfig(ctx); err != nil {
 			a.reporter.Warn("could not refresh the OpenCode configuration: " + err.Error())
-		}
-
-		if a.cfg.Inference.KeepInRAM {
-			if err := a.WarmModel(ctx); err != nil {
-				a.reporter.Warn("could not warm the model: " + err.Error())
-			}
 		}
 	}
 

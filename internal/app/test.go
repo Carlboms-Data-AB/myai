@@ -165,18 +165,26 @@ func (a *App) Test(ctx context.Context) TestReport {
 	return report
 }
 
-// probeInference asks the model to echo a phrase, which proves the whole path
-// from HTTP request to generated tokens actually works.
+// probeInference proves the whole path from HTTP request to generated tokens.
+//
+// What is being checked is the installation, not the model's obedience. A
+// small or reasoning model may spend its budget thinking and never echo the
+// phrase; that still shows inference working, so it passes with the nuance
+// reported rather than failing.
 func (a *App) probeInference(ctx context.Context, modelID string) (bool, string) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
-	reply, err := a.Inference().Complete(ctx, modelID, "Reply with exactly this and nothing else: "+probePhrase, 32)
+	reply, err := a.Inference().Ask(ctx, modelID, "Reply with exactly this and nothing else: "+probePhrase, 256)
 	if err != nil {
 		return false, err.Error()
 	}
-	if !strings.Contains(strings.ToLower(reply), probePhrase) {
-		return false, "the model replied without the expected phrase"
+	switch {
+	case strings.Contains(strings.ToLower(reply.Content), probePhrase):
+		return true, "the model answered correctly"
+	case reply.Generated():
+		return true, "the model generated a reply, though not the phrase asked for"
+	default:
+		return false, "the model produced nothing"
 	}
-	return true, "the model answered correctly"
 }

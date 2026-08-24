@@ -143,6 +143,9 @@ type chatResponse struct {
 	Choices []struct {
 		Message struct {
 			Content string `json:"content"`
+			// Reasoning models put their working here and may leave Content
+			// empty when they run out of tokens mid-thought.
+			Reasoning string `json:"reasoning_content"`
 		} `json:"message"`
 	} `json:"choices"`
 	Error *struct {
@@ -150,8 +153,28 @@ type chatResponse struct {
 	} `json:"error"`
 }
 
-// Complete sends a chat completion and returns the assistant's reply.
+// Reply is what a model produced.
+type Reply struct {
+	// Content is the answer.
+	Content string
+	// Reasoning is the model's working, for models that expose it.
+	Reasoning string
+}
+
+// Generated reports whether the model produced anything at all, which is what
+// proves the path from request to tokens works.
+func (r Reply) Generated() bool {
+	return strings.TrimSpace(r.Content) != "" || strings.TrimSpace(r.Reasoning) != ""
+}
+
+// Complete sends a chat completion and returns the assistant's answer.
 func (c *Client) Complete(ctx context.Context, model, prompt string, maxTokens int) (string, error) {
+	reply, err := c.Ask(ctx, model, prompt, maxTokens)
+	return reply.Content, err
+}
+
+// Ask sends a chat completion and returns everything the model produced.
+func (c *Client) Ask(ctx context.Context, model, prompt string, maxTokens int) (Reply, error) {
 	body, err := json.Marshal(chatRequest{
 		Model:       model,
 		Messages:    []chatMessage{{Role: "user", Content: prompt}},
@@ -159,39 +182,42 @@ func (c *Client) Complete(ctx context.Context, model, prompt string, maxTokens i
 		Temperature: 0,
 	})
 	if err != nil {
-		return "", err
+		return Reply{}, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/v1/chat/completions", bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return Reply{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.http().Do(req)
 	if err != nil {
-		return "", err
+		return Reply{}, err
 	}
 	defer resp.Body.Close()
 
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return "", err
+		return Reply{}, err
 	}
 	var parsed chatResponse
 	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return "", fmt.Errorf("unexpected reply from %s: %s", c.BaseURL, strings.TrimSpace(string(raw)))
+		return Reply{}, fmt.Errorf("unexpected reply from %s: %s", c.BaseURL, strings.TrimSpace(string(raw)))
 	}
 	if parsed.Error != nil {
-		return "", fmt.Errorf("inference failed: %s", parsed.Error.Message)
+		return Reply{}, fmt.Errorf("inference failed: %s", parsed.Error.Message)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("inference failed: %s", resp.Status)
+		return Reply{}, fmt.Errorf("inference failed: %s", resp.Status)
 	}
 	if len(parsed.Choices) == 0 {
-		return "", fmt.Errorf("inference returned no choices")
+		return Reply{}, fmt.Errorf("inference returned no choices")
 	}
-	return parsed.Choices[0].Message.Content, nil
+	return Reply{
+		Content:   parsed.Choices[0].Message.Content,
+		Reasoning: parsed.Choices[0].Message.Reasoning,
+	}, nil
 }
 
 // Warm loads the model into memory by asking for a single token. It is how
