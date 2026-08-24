@@ -97,6 +97,25 @@ func (b *Backend) Install(ctx context.Context, _ config.Config, rep progress.Rep
 	return nil
 }
 
+// Uninstall removes the Homebrew formula MyAI installed. Models live outside
+// the formula and are untouched.
+func (b *Backend) Uninstall(ctx context.Context, rep progress.Reporter) error {
+	reporter := progress.Or(rep)
+
+	if !run.Available(b.Runner, "brew") {
+		return fmt.Errorf("Homebrew is not available to remove mlx-serve")
+	}
+	reporter.Step("Removing mlx-serve")
+	if _, err := b.Runner.Run(ctx, run.Spec{
+		Name:   "brew",
+		Args:   []string{"uninstall", "ddalcu/mlx-serve/mlx-serve"},
+		OnLine: reporter.Info,
+	}); err != nil {
+		return fmt.Errorf("uninstall mlx-serve: %w", err)
+	}
+	return nil
+}
+
 // Store returns the shared mlx-serve model store.
 func (b *Backend) Store() models.Store {
 	return models.NewMLXStore(b.ModelDir, Executable, b.Runner, b.GOOS, b.GOARCH)

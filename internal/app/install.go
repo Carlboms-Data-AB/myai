@@ -63,11 +63,29 @@ func (a *App) Install(ctx context.Context, opts InstallOptions) error {
 	}
 
 	if opts.Dependencies {
-		if err := a.Backend().Install(ctx, a.cfg, a.reporter); err != nil {
+		// Record what MyAI installs, so uninstall can remove exactly that and
+		// leave alone anything that was already here.
+		b := a.Backend()
+		backendWasPresent := b.Detect(ctx).Installed
+		openCodeWasPresent := a.oc.Detect(ctx).Installed
+
+		if err := b.Install(ctx, a.cfg, a.reporter); err != nil {
 			return err
 		}
 		if err := a.oc.Install(ctx, a.reporter); err != nil {
 			return err
+		}
+
+		if err := a.recordInstalled(func(m *Manifest) {
+			if !backendWasPresent && b.Detect(ctx).Installed {
+				m.Backend = true
+				m.BackendName = b.Name()
+			}
+			if !openCodeWasPresent && a.oc.Detect(ctx).Installed {
+				m.OpenCode = true
+			}
+		}); err != nil {
+			a.reporter.Warn("could not record what was installed: " + err.Error())
 		}
 	}
 
@@ -379,5 +397,9 @@ func (a *App) InstallBrowserSkill(ctx context.Context) error {
 		return err
 	}
 	a.reporter.Info("ego lite also needs its macOS application and a one-time setup in its own interface")
+
+	if err := a.recordInstalled(func(m *Manifest) { m.BrowserSkill = true }); err != nil {
+		a.reporter.Warn("could not record the browser skill: " + err.Error())
+	}
 	return nil
 }

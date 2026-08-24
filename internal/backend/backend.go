@@ -81,6 +81,10 @@ type Backend interface {
 	// Install puts the backend on the machine, doing nothing if it is
 	// already present and usable.
 	Install(ctx context.Context, cfg config.Config, rep progress.Reporter) error
+	// Uninstall removes the backend. It is only called for a backend MyAI
+	// installed itself, so it need not worry about taking away something the
+	// operator put there.
+	Uninstall(ctx context.Context, rep progress.Reporter) error
 	// Store manages this backend's model artifacts.
 	Store() models.Store
 	// BaseURL is the inference API root.

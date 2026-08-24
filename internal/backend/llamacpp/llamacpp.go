@@ -199,6 +199,13 @@ func (b *Backend) latestRelease(ctx context.Context) (string, []string, error) {
 	return "", nil, fmt.Errorf("no llama.cpp build release found")
 }
 
+// Uninstall removes the llama.cpp build MyAI unpacked. Models are stored
+// elsewhere and are untouched.
+func (b *Backend) Uninstall(_ context.Context, rep progress.Reporter) error {
+	progress.Or(rep).Step("Removing llama.cpp")
+	return os.RemoveAll(b.ToolDir)
+}
+
 // Store returns the GGUF model store.
 func (b *Backend) Store() models.Store {
 	return models.NewGGUFStore(b.ModelDir, b.GOOS, b.GOARCH)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/Carlboms-Data-AB/myai/internal/platform"
 	"github.com/Carlboms-Data-AB/myai/internal/service"
@@ -59,13 +61,35 @@ func (a *App) PlanUninstall(ctx context.Context, mode UninstallMode) (UninstallP
 			a.env.State,
 			a.env.Executable(),
 		)
-		// Tools MyAI downloaded itself live here and go with it. Anything
-		// installed independently, such as a Homebrew mlx-serve or an
-		// OpenCode already on PATH, is left alone.
 		if dirExists(a.env.ToolsDir()) {
 			plan.Removes = append(plan.Removes, a.env.ToolsDir()+" (tools MyAI downloaded)")
 		}
-		plan.Keeps = append(plan.Keeps, "anything you installed yourself, such as a Homebrew mlx-serve")
+
+		// Dependencies MyAI installed go too. Ones that were already here do
+		// not, because they are not MyAI's to remove. Anything living inside
+		// the tools directory goes either way, since that directory is
+		// deleted, so the plan has to say so regardless of what was recorded.
+		manifest := a.LoadManifest()
+		b := a.Backend()
+
+		backendName := manifest.BackendName
+		if backendName == "" {
+			backendName = b.Name()
+		}
+		if manifest.Backend || a.underToolsDir(b.Detect(ctx).Path) {
+			plan.Removes = append(plan.Removes, backendName+", which MyAI installed")
+		} else {
+			plan.Keeps = append(plan.Keeps, backendName+", which was already installed")
+		}
+
+		if manifest.OpenCode || a.underToolsDir(a.oc.Detect(ctx).Path) {
+			plan.Removes = append(plan.Removes, "OpenCode, which MyAI installed")
+		} else {
+			plan.Keeps = append(plan.Keeps, "OpenCode, which was already installed")
+		}
+		if manifest.BrowserSkill {
+			plan.Keeps = append(plan.Keeps, "the ego-browser skill, which has to be removed with npx")
+		}
 	}
 	if removesModels {
 		plan.Removes = append(plan.Removes,
@@ -83,9 +107,12 @@ func (a *App) PlanUninstall(ctx context.Context, mode UninstallMode) (UninstallP
 // touched when the mode explicitly says so.
 func (a *App) Uninstall(ctx context.Context, mode UninstallMode) error {
 	if mode != UninstallModelsOnly {
+		// Read this before the configuration directory goes.
+		manifest := a.LoadManifest()
 		if err := a.removeApp(ctx); err != nil {
 			return err
 		}
+		a.removeInstalledTools(ctx, manifest)
 	}
 	if mode == UninstallWithModels || mode == UninstallModelsOnly {
 		if err := a.removeModels(ctx); err != nil {
@@ -131,6 +158,24 @@ func (a *App) removeApp(ctx context.Context) error {
 	return nil
 }
 
+// removeInstalledTools removes the dependencies MyAI installed. Anything that
+// was already on the machine is left where it is.
+func (a *App) removeInstalledTools(ctx context.Context, manifest Manifest) {
+	if manifest.Backend {
+		if err := a.Backend().Uninstall(ctx, a.reporter); err != nil {
+			a.reporter.Warn("could not remove the inference backend: " + err.Error())
+		}
+	}
+	if manifest.OpenCode {
+		// OpenCode was unpacked into the tools directory, which removeApp has
+		// already deleted, so there is nothing more to do than say so.
+		a.reporter.Info("removed OpenCode")
+	}
+	if manifest.BrowserSkill {
+		a.reporter.Info("the ego-browser skill was installed by MyAI; remove it with: npx skills remove citrolabs/ego-lite")
+	}
+}
+
 func (a *App) removeModels(ctx context.Context) error {
 	store := a.Backend().Store()
 	location := store.Location()
@@ -174,6 +219,19 @@ func (a *App) removePathBlock() error {
 		return nil
 	}
 	return os.WriteFile(profile, []byte(cleaned+"\n"), 0o644)
+}
+
+// underToolsDir reports whether a path lives in the directory MyAI unpacks
+// downloaded tools into, and so goes when that directory is removed.
+func (a *App) underToolsDir(path string) bool {
+	if path == "" {
+		return false
+	}
+	rel, err := filepath.Rel(a.env.ToolsDir(), path)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // dirExists reports whether a directory is present.
