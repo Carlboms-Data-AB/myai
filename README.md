@@ -411,6 +411,11 @@ Authentication is OpenCode's own, through `OPENCODE_SERVER_USERNAME` and
 `OPENCODE_SERVER_PASSWORD`. This is the official OpenCode Web interface; MyAI
 adds no web frontend of its own.
 
+The service runs `opencode serve` rather than `opencode web`. Both host the
+same interface, but `web` also opens a browser, which is wrong for something a
+service manager starts: every restart would drop another tab on whoever is
+logged in.
+
 ### Web search and browser automation
 
 Web search is off by default. Turning it on in **Configure** sets

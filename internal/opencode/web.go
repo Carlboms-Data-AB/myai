@@ -51,9 +51,14 @@ func WebServiceSpec(p WebParams) (service.Spec, error) {
 }
 
 // WebArgs returns the OpenCode command line for the Web UI.
+//
+// This uses "serve" rather than "web" on purpose. Both host the same web
+// interface, but "web" also opens a browser, which is wrong for something
+// started by a service manager: every restart would put another tab on the
+// screen of whoever happens to be logged in.
 func WebArgs(cfg config.Config) []string {
 	return []string{
-		"web",
+		"serve",
 		"--hostname", cfg.Web.Host,
 		"--port", strconv.Itoa(cfg.Web.Port),
 	}

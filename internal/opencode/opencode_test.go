@@ -203,11 +203,17 @@ func TestEnvOmitsExaWhenWebToolsAreOff(t *testing.T) {
 	}
 }
 
-func TestWebArgs(t *testing.T) {
+func TestWebArgsUseTheHeadlessServer(t *testing.T) {
+	// "opencode web" opens a browser on every start, which a background
+	// service must not do. "opencode serve" hosts the same interface without
+	// it.
 	cfg := config.Default()
 	got := strings.Join(WebArgs(cfg), " ")
-	if got != "web --hostname 0.0.0.0 --port 4096" {
+	if got != "serve --hostname 0.0.0.0 --port 4096" {
 		t.Errorf("WebArgs = %q", got)
+	}
+	if strings.HasPrefix(got, "web") {
+		t.Error("the service must not run the browser-opening command")
 	}
 }
 

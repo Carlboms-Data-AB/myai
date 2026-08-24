@@ -237,6 +237,32 @@ func WriteConfig(path string, in ConfigInput) error {
 	return os.WriteFile(path, body, 0o600)
 }
 
+// AdvertisedContext reports the context window the managed configuration tells
+// OpenCode a model has.
+func AdvertisedContext(path, modelID string) (int, error) {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	var parsed struct {
+		Provider map[string]struct {
+			Models map[string]struct {
+				Limit struct {
+					Context int `json:"context"`
+				} `json:"limit"`
+			} `json:"models"`
+		} `json:"provider"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return 0, err
+	}
+	model, ok := parsed.Provider[ProviderID].Models[modelID]
+	if !ok {
+		return 0, fmt.Errorf("managed OpenCode config does not define model %q", modelID)
+	}
+	return model.Limit.Context, nil
+}
+
 // ValidateConfig checks that a managed configuration is present, parseable and
 // still pinned to the expected local model.
 func ValidateConfig(path, modelID, baseURL string) error {
