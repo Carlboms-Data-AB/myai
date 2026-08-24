@@ -238,6 +238,9 @@ func TestServiceSpecsOmitWebWhenDisabled(t *testing.T) {
 
 func TestWebServiceRunsMyAINotOpenCodeDirectly(t *testing.T) {
 	a, _, _ := newTestApp(t, "linux", "amd64")
+	if err := a.Update(func(c *config.Config) { c.Web.Enabled = true }); err != nil {
+		t.Fatal(err)
+	}
 
 	specs, err := a.ServiceSpecs(context.Background())
 	if err != nil {
@@ -341,7 +344,7 @@ func TestWebAccessGeneratesOnceInstalled(t *testing.T) {
 	if err := a.env.EnsureDirs(); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.SetConfig(a.Config()); err != nil {
+	if err := a.Update(func(c *config.Config) { c.Web.Enabled = true }); err != nil {
 		t.Fatal(err)
 	}
 

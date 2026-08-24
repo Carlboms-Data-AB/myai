@@ -92,7 +92,9 @@ type Inference struct {
 
 // Web configures the OpenCode Web service.
 type Web struct {
-	// Enabled controls whether the OpenCode Web background service runs.
+	// Enabled controls whether the OpenCode Web background service runs. It is
+	// off by default: it listens on the network, and nothing that does that
+	// should start because you installed something.
 	Enabled bool `toml:"enabled"`
 	// Host is the bind address. Anything other than loopback requires a
 	// password, which MyAI generates.
@@ -131,7 +133,7 @@ func Default() Config {
 			SkipMemoryCheck: true,
 		},
 		Web: Web{
-			Enabled:  true,
+			Enabled:  false,
 			Host:     "0.0.0.0",
 			Port:     4096,
 			Username: "opencode",

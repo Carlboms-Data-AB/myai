@@ -312,7 +312,7 @@ acceleration = "auto"
 skip_memory_check = true
 
 [web]
-enabled = true
+enabled = false
 host = "0.0.0.0"
 port = 4096
 username = "opencode"
@@ -392,8 +392,10 @@ model.
 
 ### OpenCode Web
 
-The Web UI binds to `0.0.0.0:4096` by default so it can be reached over a LAN
-or an overlay network. `myai web` prints the address, preferring an overlay
+The Web UI is off by default, because it listens on the network. Turn it on
+under **Configure · OpenCode Web**. Once on, it binds to `0.0.0.0:4096` so it
+can be reached over a LAN or an overlay network, and it will not start without
+a password when bound beyond loopback. `myai web` prints the address, preferring an overlay
 address in `100.64.0.0/10` when it finds one:
 
 ```text

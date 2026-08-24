@@ -65,7 +65,6 @@ func TestStatusCommandRendersEverythingItPromises(t *testing.T) {
 		"inference API",
 		"inference service",
 		"OpenCode Web",
-		"web UI address",
 		"web search",
 		"browser automation",
 	} {
@@ -191,14 +190,15 @@ func TestNonInteractiveRunReportsStatusRatherThanWaiting(t *testing.T) {
 	}
 }
 
-func TestWebCommandSaysWhenNotInstalled(t *testing.T) {
+func TestWebCommandSaysTheWebUIIsOff(t *testing.T) {
+	// The Web UI is off until asked for, so this is what most machines see.
 	a, console, out, _ := harness(t, "linux", "amd64", "")
 
 	if err := dispatch(context.Background(), a, console, "web", nil); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "not installed") {
-		t.Errorf("expected a clear message:\n%s", out.String())
+	if !strings.Contains(out.String(), "disabled") {
+		t.Errorf("expected the output to say the Web UI is off:\n%s", out.String())
 	}
 }
 
