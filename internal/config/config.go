@@ -59,10 +59,13 @@ type Runtime struct {
 	// Silicon, where MLX always uses Metal.
 	Acceleration string `toml:"acceleration"`
 	// SkipMemoryCheck tells the backend to load the model even when its own
-	// memory pre-flight says there is not enough room. mlx-serve measures
-	// memory conservatively and can refuse a model that would in fact load,
-	// for instance when the page cache still holds the weights that were just
-	// read from disk. Only mlx-serve has such a check.
+	// memory pre-flight says there is not enough room.
+	//
+	// It is on by default because mlx-serve's estimate is measurably wrong:
+	// on a 24 GB machine with 19 GB free it refused a model that peaks at
+	// 6.9 GB. Its own error message recommends the override. Turn it off if
+	// you would rather have the backend refuse than risk swapping.
+	// Only mlx-serve has such a check; llama.cpp ignores this.
 	SkipMemoryCheck bool `toml:"skip_memory_check"`
 }
 
@@ -124,7 +127,8 @@ func Default() Config {
 			IdleUnloadMinutes: 0,
 		},
 		Runtime: Runtime{
-			Acceleration: AccelerationAuto,
+			Acceleration:    AccelerationAuto,
+			SkipMemoryCheck: true,
 		},
 		Web: Web{
 			Enabled:  true,

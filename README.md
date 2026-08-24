@@ -309,6 +309,7 @@ idle_unload_minutes = 0
 
 [runtime]
 acceleration = "auto"
+skip_memory_check = true
 
 [web]
 enabled = true
@@ -353,11 +354,11 @@ which on macOS can be much less than what is really available: the page cache
 may still be holding the several gigabytes of weights it has just read from
 disk.
 
-If `myai test` reports a memory failure while the machine plainly has room,
-turn on **Runtime · Skip memory pre-flight**. That passes
-`--skip-mem-preflight`, and mlx-serve loads the model anyway. It is off by
-default, because a check that is usually right should not be silently
-disabled. llama.cpp has no equivalent check and ignores the setting.
+MyAI therefore passes `--skip-mem-preflight` by default, under **Runtime ·
+Skip memory pre-flight**. The measured case: a 24 GB Mac with about 19 GB free
+refused a model that peaks at 6.9 GB, and mlx-serve's own error message
+recommends the override. Turn it off if you would rather the backend refuse
+than risk swapping. llama.cpp has no equivalent check and ignores the setting.
 
 ### Background services
 

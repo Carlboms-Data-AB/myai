@@ -30,6 +30,7 @@ func params(t *testing.T, mutate func(*config.Config)) backend.SpecParams {
 		Name:      service.Name("darwin", service.RoleInference),
 		StdoutLog: "/tmp/logs/inference.log",
 		StderrLog: "/tmp/logs/inference-error.log",
+		LogDir:    "/tmp/logs",
 	}
 }
 
@@ -252,6 +253,8 @@ func TestKeepInRAMRunsTheSameCommandThePrototypeDid(t *testing.T) {
 		"--model-dir", "/Users/t/.mlx-serve/models",
 		"--host", "127.0.0.1",
 		"--port", "11234",
+		"--log-file", "/tmp/logs",
+		"--skip-mem-preflight",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("args = %v, want exactly %v", got, want)
@@ -263,14 +266,14 @@ func TestKeepInRAMRunsTheSameCommandThePrototypeDid(t *testing.T) {
 	}
 }
 
-func TestSkipMemoryCheckIsOptIn(t *testing.T) {
-	off := joined(argsFor(t, nil))
-	if strings.Contains(off, "--skip-mem-preflight") {
-		t.Errorf("the memory check must not be skipped unless asked: %q", off)
+func TestMemoryCheckIsSkippedByDefaultAndCanBeRestored(t *testing.T) {
+	on := joined(argsFor(t, nil))
+	if !strings.Contains(on, "--skip-mem-preflight") {
+		t.Errorf("args %q should skip the pre-flight by default", on)
 	}
 
-	on := joined(argsFor(t, func(c *config.Config) { c.Runtime.SkipMemoryCheck = true }))
-	if !strings.Contains(on, "--skip-mem-preflight") {
-		t.Errorf("args %q should skip the pre-flight", on)
+	off := joined(argsFor(t, func(c *config.Config) { c.Runtime.SkipMemoryCheck = false }))
+	if strings.Contains(off, "--skip-mem-preflight") {
+		t.Errorf("turning the override off must restore the check: %q", off)
 	}
 }

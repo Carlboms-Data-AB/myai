@@ -38,6 +38,11 @@ func TestDefaultMatchesPrototypeBehaviour(t *testing.T) {
 	if d.Inference.KeepInRAM || d.Inference.IdleUnloadMinutes != 0 {
 		t.Errorf("lifecycle defaults = %+v, want load on demand", d.Inference)
 	}
+	// mlx-serve's memory pre-flight refuses models that fit, so MyAI works
+	// out of the box only with the override on.
+	if !d.Runtime.SkipMemoryCheck {
+		t.Error("the memory pre-flight override should be on by default")
+	}
 	if err := d.Validate(); err != nil {
 		t.Fatalf("defaults do not validate: %v", err)
 	}
@@ -61,6 +66,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	want.Web.Port = 4444
 	want.Tools.BrowserAutomation = true
 	want.Runtime.Acceleration = AccelerationVulkan
+	want.Runtime.SkipMemoryCheck = false
 
 	if err := Save(path, want); err != nil {
 		t.Fatalf("Save: %v", err)
