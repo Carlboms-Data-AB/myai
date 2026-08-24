@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/Carlboms-Data-AB/myai/internal/backend"
@@ -17,14 +18,25 @@ func (a *App) Apply(ctx context.Context) error {
 	if err := a.env.EnsureDirs(); err != nil {
 		return err
 	}
-	if err := a.WriteOpenCodeConfig(ctx); err != nil {
+
+	openCodeChanged, err := a.writeOpenCodeConfig(ctx)
+	if err != nil {
 		return err
 	}
 	a.warnIfModelMissing(ctx)
-	if err := a.InstallServices(ctx); err != nil {
+
+	changed, err := a.InstallServices(ctx)
+	if err != nil {
 		return err
 	}
-	return a.Restart(ctx)
+
+	// Restart only what the change actually affects. Bouncing OpenCode Web
+	// because the context size moved would interrupt a session, and OpenCode
+	// announces itself again every time it starts.
+	restartInference := changed[service.RoleInference]
+	restartWeb := changed[service.RoleWeb] || openCodeChanged
+
+	return a.restartRoles(ctx, restartInference, restartWeb)
 }
 
 // warnIfModelMissing points out that the backend is about to be started
@@ -42,14 +54,22 @@ func (a *App) warnIfModelMissing(ctx context.Context) {
 	a.reporter.Warn(model.Label() + " is not downloaded; run Install / update or Models to fetch it")
 }
 
-// WriteOpenCodeConfig regenerates the managed OpenCode configuration from the
-// current settings and active model.
+// WriteOpenCodeConfig regenerates the managed OpenCode configuration.
 func (a *App) WriteOpenCodeConfig(ctx context.Context) error {
+	_, err := a.writeOpenCodeConfig(ctx)
+	return err
+}
+
+// writeOpenCodeConfig regenerates the managed OpenCode configuration and
+// reports whether the file changed.
+func (a *App) writeOpenCodeConfig(ctx context.Context) (bool, error) {
 	model, err := a.ActiveModel()
 	if err != nil {
-		return err
+		return false, err
 	}
 	b := a.Backend()
+
+	previous, _ := os.ReadFile(a.env.OpenCodeConfigFile())
 
 	context := a.servedContext(ctx, b.ModelName(model))
 	output := a.cfg.Inference.Output
@@ -57,7 +77,7 @@ func (a *App) WriteOpenCodeConfig(ctx context.Context) error {
 		output = context / 2
 	}
 
-	return opencode.WriteConfig(a.env.OpenCodeConfigFile(), opencode.ConfigInput{
+	if err := opencode.WriteConfig(a.env.OpenCodeConfigFile(), opencode.ConfigInput{
 		BaseURL:   b.BaseURL(a.cfg),
 		ModelID:   b.ModelName(model),
 		ModelName: model.Label(),
@@ -66,7 +86,15 @@ func (a *App) WriteOpenCodeConfig(ctx context.Context) error {
 			Output:  output,
 		},
 		WebTools: a.cfg.Tools.WebSearch,
-	})
+	}); err != nil {
+		return false, err
+	}
+
+	current, err := os.ReadFile(a.env.OpenCodeConfigFile())
+	if err != nil {
+		return false, err
+	}
+	return string(previous) != string(current), nil
 }
 
 // servedContext returns the context window to advertise to OpenCode. The
@@ -131,18 +159,24 @@ func (a *App) ServiceSpecs(ctx context.Context) ([]service.Spec, error) {
 	return specs, nil
 }
 
-// InstallServices registers the background services.
-func (a *App) InstallServices(ctx context.Context) error {
+// InstallServices registers the background services and reports which roles
+// were actually changed.
+func (a *App) InstallServices(ctx context.Context) (map[string]bool, error) {
 	a.StopLegacyServices(ctx)
 
+	changed := map[string]bool{}
 	specs, err := a.ServiceSpecs(ctx)
 	if err != nil {
-		return err
+		return changed, err
 	}
 	for _, spec := range specs {
-		a.reporter.Step("Installing service " + spec.Name)
-		if err := a.services.Install(ctx, spec); err != nil {
-			return err
+		didChange, err := a.services.Install(ctx, spec)
+		if err != nil {
+			return changed, err
+		}
+		changed[spec.Role] = didChange
+		if didChange {
+			a.reporter.Info("installed service " + spec.Name)
 		}
 	}
 
@@ -152,7 +186,7 @@ func (a *App) InstallServices(ctx context.Context) error {
 			a.reporter.Warn("could not remove the OpenCode Web service: " + err.Error())
 		}
 	}
-	return nil
+	return changed, nil
 }
 
 // StopLegacyServices shuts down services from the Bash prototype so they do
@@ -175,6 +209,38 @@ func (a *App) StopLegacyServices(ctx context.Context) {
 // configuration asks for the model to stay in RAM, it is warmed here so the
 // first real request is fast.
 func (a *App) Restart(ctx context.Context) error {
+	return a.restartRoles(ctx, true, true)
+}
+
+// restartRoles restarts the services asked for, waiting for each to answer.
+func (a *App) restartRoles(ctx context.Context, inference, web bool) error {
+	if !inference && !web {
+		a.reporter.Info("nothing needed restarting")
+		return nil
+	}
+	if !inference {
+		return a.restartWeb(ctx)
+	}
+	return a.restartAll(ctx, web)
+}
+
+func (a *App) restartWeb(ctx context.Context) error {
+	if !a.cfg.Web.Enabled {
+		return nil
+	}
+	a.reporter.Step("Restarting OpenCode Web")
+	if err := a.services.Restart(ctx, a.ServiceName(service.RoleWeb)); err != nil {
+		return fmt.Errorf("restart the OpenCode Web service: %w", err)
+	}
+	if a.WaitWebReady(ctx, a.readyTimeout) {
+		a.reporter.Info("OpenCode Web ready at " + opencode.LocalWebURL(a.cfg))
+	} else {
+		a.reporter.Warn("OpenCode Web has not started answering yet")
+	}
+	return nil
+}
+
+func (a *App) restartAll(ctx context.Context, web bool) error {
 	name := a.ServiceName(service.RoleInference)
 	if state, err := a.services.Status(ctx, name); err == nil && !state.Installed {
 		return fmt.Errorf("the %s service is not installed; run Install / update first", name)
@@ -206,20 +272,10 @@ func (a *App) Restart(ctx context.Context) error {
 		}
 	}
 
-	if !a.cfg.Web.Enabled {
+	if !web {
 		return nil
 	}
-	if err := a.services.Restart(ctx, a.ServiceName(service.RoleWeb)); err != nil {
-		return fmt.Errorf("restart the OpenCode Web service: %w", err)
-	}
-	// OpenCode Web takes a moment to start listening. Returning before it
-	// does makes a check that runs straight afterwards fail for no reason.
-	if a.WaitWebReady(ctx, a.readyTimeout) {
-		a.reporter.Info("OpenCode Web ready at " + opencode.LocalWebURL(a.cfg))
-	} else {
-		a.reporter.Warn("OpenCode Web has not started answering yet")
-	}
-	return nil
+	return a.restartWeb(ctx)
 }
 
 // WaitWebReady polls the Web UI until it answers or the deadline passes.

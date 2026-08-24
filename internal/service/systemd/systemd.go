@@ -56,33 +56,41 @@ func (m *Manager) systemctl(ctx context.Context, args ...string) (run.Result, er
 }
 
 // Install writes the unit and enables it, replacing any earlier definition.
-func (m *Manager) Install(ctx context.Context, spec service.Spec) error {
+func (m *Manager) Install(ctx context.Context, spec service.Spec) (bool, error) {
 	if err := os.MkdirAll(m.UnitDir, 0o755); err != nil {
-		return err
+		return false, err
 	}
 	for _, p := range []string{spec.StdoutLog, spec.StderrLog} {
 		if p != "" {
 			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-				return err
+				return false, err
 			}
 		}
 	}
 
 	unit, err := Unit(spec)
 	if err != nil {
-		return err
+		return false, err
 	}
-	if err := os.WriteFile(m.UnitPath(spec.Name), []byte(unit), 0o644); err != nil {
-		return err
+	path := m.UnitPath(spec.Name)
+
+	// An unchanged unit that is already running needs nothing done to it.
+	if existing, err := os.ReadFile(path); err == nil && string(existing) == unit {
+		if state, err := m.Status(ctx, spec.Name); err == nil && state.Running {
+			return false, nil
+		}
 	}
 
+	if err := os.WriteFile(path, []byte(unit), 0o644); err != nil {
+		return false, err
+	}
 	if _, err := m.systemctl(ctx, "daemon-reload"); err != nil {
-		return fmt.Errorf("systemctl daemon-reload: %w", err)
+		return false, fmt.Errorf("systemctl daemon-reload: %w", err)
 	}
 	if _, err := m.systemctl(ctx, "enable", "--now", UnitName(spec.Name)); err != nil {
-		return fmt.Errorf("enable %s: %w", spec.Name, err)
+		return false, fmt.Errorf("enable %s: %w", spec.Name, err)
 	}
-	return nil
+	return true, nil
 }
 
 // EnableLinger asks systemd to keep user services running when nobody is

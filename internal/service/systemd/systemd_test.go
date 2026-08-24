@@ -103,7 +103,7 @@ func TestInstallWritesUnitAndEnables(t *testing.T) {
 	fake := run.NewFake()
 	m := New(units, "tobias", fake)
 
-	if err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
+	if _, err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(units, "myai-opencode.service")); err != nil {
@@ -126,7 +126,7 @@ func TestStatusParsesSystemctlShow(t *testing.T) {
 	fake := run.NewFake()
 	fake.Respond("systemctl --user show", "ActiveState=active\nSubState=running\nMainPID=9182\nLoadState=loaded\n")
 	m := New(units, "tobias", fake)
-	if err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
+	if _, err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -161,7 +161,7 @@ func TestRemoveDisablesAndDeletes(t *testing.T) {
 	units := filepath.Join(dir, "systemd", "user")
 	fake := run.NewFake()
 	m := New(units, "tobias", fake)
-	if err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
+	if _, err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
 		t.Fatal(err)
 	}
 

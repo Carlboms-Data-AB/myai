@@ -62,31 +62,31 @@ func (m *Manager) Exists(ctx context.Context, name string) bool {
 // Install registers the service, or updates it when it already exists.
 // Updating in place avoids the window where a removed service still lingers in
 // the service database and a fresh install fails.
-func (m *Manager) Install(ctx context.Context, spec service.Spec) error {
+func (m *Manager) Install(ctx context.Context, spec service.Spec) (bool, error) {
 	if strings.TrimSpace(spec.Exec) == "" {
-		return fmt.Errorf("service %s has no executable", spec.Name)
+		return false, fmt.Errorf("service %s has no executable", spec.Name)
 	}
 	exists := m.Exists(ctx, spec.Name)
 	if !exists && strings.TrimSpace(spec.Account.User) == "" {
-		return ErrAccountRequired
+		return false, ErrAccountRequired
 	}
 	for _, p := range []string{spec.StdoutLog, spec.StderrLog} {
 		if p != "" {
 			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-				return err
+				return false, err
 			}
 		}
 	}
 
 	if !exists {
 		if _, err := m.nssm(ctx, "install", spec.Name, spec.Exec); err != nil {
-			return fmt.Errorf("install %s: %w", spec.Name, err)
+			return false, fmt.Errorf("install %s: %w", spec.Name, err)
 		}
 	}
 
 	for _, setting := range Settings(spec) {
 		if _, err := m.nssm(ctx, append([]string{"set", spec.Name}, setting...)...); err != nil {
-			return fmt.Errorf("configure %s %s: %w", spec.Name, setting[0], err)
+			return false, fmt.Errorf("configure %s %s: %w", spec.Name, setting[0], err)
 		}
 	}
 
@@ -96,10 +96,12 @@ func (m *Manager) Install(ctx context.Context, spec service.Spec) error {
 	// ask for a password again.
 	if strings.TrimSpace(spec.Account.User) != "" {
 		if _, err := m.nssm(ctx, "set", spec.Name, "ObjectName", spec.Account.User, spec.Account.Password); err != nil {
-			return fmt.Errorf("set service account for %s: %w", spec.Name, err)
+			return false, fmt.Errorf("set service account for %s: %w", spec.Name, err)
 		}
 	}
-	return nil
+	// NSSM keeps its configuration in the service database, which cannot be
+	// compared cheaply, so a reconfiguration always counts as a change.
+	return true, nil
 }
 
 // Settings returns the nssm parameters for a service, excluding the account

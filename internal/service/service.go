@@ -108,8 +108,10 @@ func (s State) Summary() string {
 type Manager interface {
 	// Kind names the underlying mechanism.
 	Kind() string
-	// Install registers the service, replacing any earlier definition.
-	Install(ctx context.Context, spec Spec) error
+	// Install registers the service, replacing any earlier definition. It
+	// reports whether anything actually changed, so a caller does not restart
+	// a service whose definition is already in place and running.
+	Install(ctx context.Context, spec Spec) (changed bool, err error)
 	// Remove stops and deregisters the service. Removing an absent service
 	// succeeds.
 	Remove(ctx context.Context, name string) error

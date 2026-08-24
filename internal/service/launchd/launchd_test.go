@@ -87,7 +87,7 @@ func TestInstallWritesAndLoadsAgent(t *testing.T) {
 	fake := run.NewFake()
 	m := New(agents, 501, fake)
 
-	if err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
+	if _, err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
 
@@ -115,7 +115,7 @@ func TestStatusParsesLaunchctlOutput(t *testing.T) {
 	agents := filepath.Join(dir, "LaunchAgents")
 	fake := run.NewFake()
 	m := New(agents, 501, fake)
-	if err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
+	if _, err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -158,7 +158,7 @@ func TestRemoveUnloadsAndDeletes(t *testing.T) {
 	agents := filepath.Join(dir, "LaunchAgents")
 	fake := run.NewFake()
 	m := New(agents, 501, fake)
-	if err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
+	if _, err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -192,7 +192,7 @@ func TestStopLeavesPlistInPlace(t *testing.T) {
 	agents := filepath.Join(dir, "LaunchAgents")
 	fake := run.NewFake()
 	m := New(agents, 501, fake)
-	if err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
+	if _, err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.Stop(context.Background(), "se.carlbomsdata.myai"); err != nil {
@@ -219,7 +219,7 @@ func TestInstallSurvivesAJobThatIsStillLoaded(t *testing.T) {
 	fake.Fail("launchctl bootstrap", errors.New("exit status 5: Bootstrap failed: 5: Input/output error"))
 
 	m := noWait(New(filepath.Join(dir, "LaunchAgents"), 501, fake))
-	if err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
+	if _, err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
 	if !fake.Ran("launchctl kickstart -k") {
@@ -235,7 +235,7 @@ func TestInstallReportsARealBootstrapFailure(t *testing.T) {
 	fake.Fail("launchctl print", errors.New("could not find service"))
 
 	m := noWait(New(filepath.Join(dir, "LaunchAgents"), 501, fake))
-	if err := m.Install(context.Background(), sampleSpec(dir)); err == nil {
+	if _, err := m.Install(context.Background(), sampleSpec(dir)); err == nil {
 		t.Fatal("expected the failure to be reported")
 	}
 }
@@ -260,7 +260,7 @@ func TestLoadRetriesThroughLaunchdsTransientStates(t *testing.T) {
 		}
 	}
 
-	if err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
+	if _, err := m.Install(context.Background(), sampleSpec(dir)); err != nil {
 		t.Fatalf("Install should have recovered: %v", err)
 	}
 }
@@ -272,7 +272,7 @@ func TestLoadGivesUpOnAPersistentFailure(t *testing.T) {
 	fake.Fail("launchctl print", errors.New("could not find service"))
 
 	m := noWait(New(filepath.Join(dir, "LaunchAgents"), 501, fake))
-	err := m.Install(context.Background(), sampleSpec(dir))
+	_, err := m.Install(context.Background(), sampleSpec(dir))
 	if err == nil {
 		t.Fatal("a failure that never clears must be reported")
 	}
@@ -289,7 +289,7 @@ func TestLoadReportsTheKickstartFailureWhenThatIsWhatPersists(t *testing.T) {
 	fake.Fail("launchctl kickstart", errors.New("exit status 37"))
 
 	m := noWait(New(filepath.Join(dir, "LaunchAgents"), 501, fake))
-	err := m.Install(context.Background(), sampleSpec(dir))
+	_, err := m.Install(context.Background(), sampleSpec(dir))
 	if err == nil {
 		t.Fatal("expected an error")
 	}

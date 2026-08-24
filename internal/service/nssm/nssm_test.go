@@ -103,7 +103,7 @@ func TestInstallRefusesWithoutAnAccount(t *testing.T) {
 	fake := run.NewFake()
 	// A service that does not exist yet has no account to inherit.
 	fake.Fail("status MyAI", errors.New("service does not exist"))
-	err := New("nssm", fake).Install(context.Background(), spec)
+	_, err := New("nssm", fake).Install(context.Background(), spec)
 	if !errors.Is(err, ErrAccountRequired) {
 		t.Fatalf("err = %v, want ErrAccountRequired", err)
 	}
@@ -119,7 +119,7 @@ func TestExistingServiceKeepsItsAccount(t *testing.T) {
 	spec.Account = service.Account{}
 
 	fake := run.NewFake().Respond("status MyAI", "SERVICE_RUNNING")
-	if err := New("nssm", fake).Install(context.Background(), spec); err != nil {
+	if _, err := New("nssm", fake).Install(context.Background(), spec); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
 	if fake.Ran("ObjectName") {
@@ -136,7 +136,7 @@ func TestInstallCreatesAndConfiguresService(t *testing.T) {
 	// A service that does not exist yet: status fails.
 	fake.Fail("status MyAI", errors.New("service does not exist"))
 
-	if err := New("nssm", fake).Install(context.Background(), sampleSpec(dir)); err != nil {
+	if _, err := New("nssm", fake).Install(context.Background(), sampleSpec(dir)); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
 	if !fake.Ran("nssm install MyAI") {
@@ -155,7 +155,7 @@ func TestInstallUpdatesExistingServiceInPlace(t *testing.T) {
 	fake := run.NewFake()
 	fake.Respond("status MyAI", "SERVICE_RUNNING")
 
-	if err := New("nssm", fake).Install(context.Background(), sampleSpec(dir)); err != nil {
+	if _, err := New("nssm", fake).Install(context.Background(), sampleSpec(dir)); err != nil {
 		t.Fatal(err)
 	}
 	if fake.Ran("nssm install MyAI") {

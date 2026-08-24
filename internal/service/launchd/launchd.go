@@ -54,35 +54,47 @@ func (m *Manager) target(label string) string {
 
 func (m *Manager) domain() string { return fmt.Sprintf("gui/%d", m.UID) }
 
-// Install writes the agent and loads it, replacing any earlier definition.
-func (m *Manager) Install(ctx context.Context, spec service.Spec) error {
+// Install writes the agent and loads it, replacing any earlier definition. An
+// agent whose definition is unchanged and already running is left alone, so
+// applying a setting that does not concern it does not interrupt it.
+func (m *Manager) Install(ctx context.Context, spec service.Spec) (bool, error) {
 	if err := os.MkdirAll(m.AgentDir, 0o755); err != nil {
-		return err
+		return false, err
 	}
 	for _, dir := range logDirs(spec) {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return err
+			return false, err
 		}
 	}
 
 	plist, err := Plist(spec)
 	if err != nil {
-		return err
+		return false, err
 	}
 	path := m.PlistPath(spec.Name)
+
+	if existing, err := os.ReadFile(path); err == nil && string(existing) == plist {
+		if m.loaded(ctx, spec.Name) {
+			return false, nil
+		}
+	}
+
 	if err := os.WriteFile(path, []byte(plist), 0o644); err != nil {
-		return err
+		return false, err
 	}
 
 	// plutil catches a malformed agent before launchd rejects it with a much
 	// less helpful message.
 	if _, err := m.Runner.Run(ctx, run.Spec{Name: "plutil", Args: []string{"-lint", path}}); err != nil {
-		return fmt.Errorf("generated launch agent is invalid: %w", err)
+		return false, fmt.Errorf("generated launch agent is invalid: %w", err)
 	}
 
 	// Booting out first makes a reinstall pick up the new definition.
 	m.bootout(ctx, spec.Name)
-	return m.load(ctx, spec.Name, path)
+	if err := m.load(ctx, spec.Name, path); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // load gets the job running from its current definition.
