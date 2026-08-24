@@ -12,6 +12,7 @@ import (
 	"github.com/Carlboms-Data-AB/myai/internal/config"
 	"github.com/Carlboms-Data-AB/myai/internal/run"
 	"github.com/Carlboms-Data-AB/myai/internal/secrets"
+	"github.com/Carlboms-Data-AB/myai/internal/service"
 )
 
 // InstallOptions control what an install or upgrade does. The three parts are
@@ -26,6 +27,8 @@ type InstallOptions struct {
 	Services bool
 	// Command installs the myai executable and puts it on PATH.
 	Command bool
+	// SelfUpdate fetches a newer MyAI release before doing anything else.
+	SelfUpdate bool
 }
 
 // FullInstall is what "Install / update" does: everything, but nothing that is
@@ -36,7 +39,7 @@ func FullInstall() InstallOptions {
 
 // UpgradeOnly refreshes MyAI and its services without considering models.
 func UpgradeOnly() InstallOptions {
-	return InstallOptions{Dependencies: true, Services: true, Command: true}
+	return InstallOptions{Dependencies: true, Services: true, Command: true, SelfUpdate: true}
 }
 
 // Install sets MyAI up, or brings an existing installation up to date. It is
@@ -47,6 +50,12 @@ func (a *App) Install(ctx context.Context, opts InstallOptions) error {
 	}
 	if err := a.env.EnsureDirs(); err != nil {
 		return err
+	}
+
+	if opts.SelfUpdate {
+		if _, err := a.SelfUpdate(ctx); err != nil {
+			a.reporter.Warn("could not check for a newer MyAI: " + err.Error())
+		}
 	}
 
 	if err := a.MigrateFromPrototype(ctx); err != nil {
@@ -95,7 +104,9 @@ func (a *App) Install(ctx context.Context, opts InstallOptions) error {
 		}
 	}
 
-	if opts.Command {
+	if opts.Command && !opts.SelfUpdate {
+		// A self-update has already put the newest binary in place; copying
+		// the running one over it would undo that.
 		if err := a.InstallCommand(); err != nil {
 			return err
 		}
@@ -106,10 +117,16 @@ func (a *App) Install(ctx context.Context, opts InstallOptions) error {
 	}
 
 	if opts.Services {
-		if err := a.InstallServices(ctx); err != nil {
+		changed, err := a.InstallServices(ctx)
+		if err != nil {
 			return err
 		}
-		if err := a.Restart(ctx); err != nil {
+		// A fresh install has to start them; an upgrade only restarts what
+		// the new definitions actually changed.
+		if err := a.restartRoles(ctx,
+			changed[service.RoleInference] || !a.serviceRunning(ctx, service.RoleInference),
+			changed[service.RoleWeb] || !a.serviceRunning(ctx, service.RoleWeb),
+		); err != nil {
 			return err
 		}
 	}
@@ -158,6 +175,12 @@ func (a *App) installChosenModels(ctx context.Context) error {
 		return err
 	}
 	return store.Install(ctx, model, a.reporter)
+}
+
+// serviceRunning reports whether a role's service is up.
+func (a *App) serviceRunning(ctx context.Context, role string) bool {
+	state, err := a.services.Status(ctx, a.ServiceName(role))
+	return err == nil && state.Running
 }
 
 // InstallCommand copies the running binary to the MyAI bin directory and makes

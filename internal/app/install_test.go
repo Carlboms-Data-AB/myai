@@ -219,3 +219,95 @@ func TestApplyLegacyConfigRejectsNonsense(t *testing.T) {
 		t.Error("clashing ports should be rejected rather than imported")
 	}
 }
+
+func TestAssetNamePerPlatform(t *testing.T) {
+	tests := map[[2]string]string{
+		{"darwin", "arm64"}:  "myai-darwin-arm64",
+		{"linux", "amd64"}:   "myai-linux-amd64",
+		{"linux", "arm64"}:   "myai-linux-arm64",
+		{"windows", "amd64"}: "myai-windows-amd64.exe",
+		{"windows", "arm64"}: "myai-windows-arm64.exe",
+	}
+	for p, want := range tests {
+		got, err := AssetName(p[0], p[1])
+		if err != nil {
+			t.Fatalf("%s/%s: %v", p[0], p[1], err)
+		}
+		if got != want {
+			t.Errorf("%s/%s = %q, want %q", p[0], p[1], got, want)
+		}
+	}
+	if _, err := AssetName("darwin", "386"); err == nil {
+		t.Error("expected an error for an unbuilt architecture")
+	}
+}
+
+func TestExpectedSum(t *testing.T) {
+	sums := `abc123  myai-darwin-arm64
+def456  myai-linux-amd64
+`
+	got, err := ExpectedSum(sums, "myai-linux-amd64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "def456" {
+		t.Errorf("ExpectedSum = %q", got)
+	}
+	if _, err := ExpectedSum(sums, "myai-windows-arm64.exe"); err == nil {
+		t.Error("expected an error when no checksum is published")
+	}
+}
+
+func TestReplaceExecutableKeepsTheTargetOnFailureFree(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "myai")
+	if err := os.WriteFile(target, []byte("old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(dir, "downloaded")
+	if err := os.WriteFile(source, []byte("new"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := replaceExecutable(source, target); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "new" {
+		t.Errorf("target = %q, want the new binary", body)
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm()&0o111 == 0 {
+		t.Error("the replacement must be executable")
+	}
+	if _, err := os.Stat(target + ".old"); err == nil {
+		t.Error("the superseded binary should be cleaned up")
+	}
+}
+
+func TestIsNewerRefusesToDowngrade(t *testing.T) {
+	tests := []struct {
+		release, running string
+		want             bool
+		why              string
+	}{
+		{"v0.2.0", "v0.1.7", true, "a newer release should be taken"},
+		{"v0.1.7", "v0.1.7", false, "the same version is not newer"},
+		{"v0.1.6", "v0.1.7", false, "an older release must not be installed"},
+		{"v0.1.7", "v0.1.7-3-g8d58e97-dirty", false, "a working-tree build must not be replaced by a release"},
+		{"v0.1.7", "dev", false, "a dev build must not be replaced"},
+		{"v1.0.0", "v0.9.9", true, "a major bump is newer"},
+		{"v0.10.0", "v0.9.0", true, "versions compare numerically, not as text"},
+	}
+	for _, tt := range tests {
+		if got := IsNewer(tt.release, tt.running); got != tt.want {
+			t.Errorf("IsNewer(%q, %q) = %v: %s", tt.release, tt.running, got, tt.why)
+		}
+	}
+}
