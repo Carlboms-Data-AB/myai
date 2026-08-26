@@ -222,13 +222,13 @@ then resolves the active model to the GGUF artifact rather than the MLX one.
 
 Every release ships a single binary with no runtime dependencies. Pick the one
 for your machine from the
-[releases page](https://github.com/Carlboms-Data-AB/myai/releases), or use the
+[releases page](https://github.com/carlbomsdata/myai/releases), or use the
 commands below.
 
 **macOS, Apple Silicon**
 
 ```bash
-curl -fsSL -o myai https://github.com/Carlboms-Data-AB/myai/releases/latest/download/myai-darwin-arm64
+curl -fsSL -o myai https://github.com/carlbomsdata/myai/releases/latest/download/myai-darwin-arm64
 chmod +x myai
 xattr -d com.apple.quarantine myai 2>/dev/null
 ./myai status
@@ -241,7 +241,7 @@ binary.
 **Linux**
 
 ```bash
-curl -fsSL -o myai https://github.com/Carlboms-Data-AB/myai/releases/latest/download/myai-linux-amd64
+curl -fsSL -o myai https://github.com/carlbomsdata/myai/releases/latest/download/myai-linux-amd64
 chmod +x myai
 ./myai status
 ```
@@ -251,7 +251,7 @@ Use `myai-linux-arm64` on ARM machines.
 **Windows**, in PowerShell:
 
 ```powershell
-curl.exe -fsSL -o myai.exe https://github.com/Carlboms-Data-AB/myai/releases/latest/download/myai-windows-amd64.exe
+curl.exe -fsSL -o myai.exe https://github.com/carlbomsdata/myai/releases/latest/download/myai-windows-amd64.exe
 .\myai.exe status
 ```
 
@@ -271,7 +271,7 @@ Then:
 To build from source instead, which needs Go 1.23 or newer:
 
 ```bash
-git clone https://github.com/Carlboms-Data-AB/myai.git
+git clone https://github.com/carlbomsdata/myai.git
 cd myai
 make build
 ./myai install
