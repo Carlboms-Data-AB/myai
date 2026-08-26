@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/Carlboms-Data-AB/myai/internal/catalog"
-	"github.com/Carlboms-Data-AB/myai/internal/config"
-	"github.com/Carlboms-Data-AB/myai/internal/models"
-	"github.com/Carlboms-Data-AB/myai/internal/platform"
+	"github.com/carlbomsdata/myai/internal/catalog"
+	"github.com/carlbomsdata/myai/internal/config"
+	"github.com/carlbomsdata/myai/internal/models"
+	"github.com/carlbomsdata/myai/internal/platform"
 )
 
 // ErrActiveModel is returned when an operation would remove the model MyAI is

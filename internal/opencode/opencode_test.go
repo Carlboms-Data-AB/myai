@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Carlboms-Data-AB/myai/internal/config"
-	"github.com/Carlboms-Data-AB/myai/internal/run"
-	"github.com/Carlboms-Data-AB/myai/internal/secrets"
-	"github.com/Carlboms-Data-AB/myai/internal/service"
+	"github.com/carlbomsdata/myai/internal/config"
+	"github.com/carlbomsdata/myai/internal/run"
+	"github.com/carlbomsdata/myai/internal/secrets"
+	"github.com/carlbomsdata/myai/internal/service"
 )
 
 func sampleInput() ConfigInput {

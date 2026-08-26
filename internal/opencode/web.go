@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/Carlboms-Data-AB/myai/internal/config"
-	"github.com/Carlboms-Data-AB/myai/internal/secrets"
-	"github.com/Carlboms-Data-AB/myai/internal/service"
+	"github.com/carlbomsdata/myai/internal/config"
+	"github.com/carlbomsdata/myai/internal/secrets"
+	"github.com/carlbomsdata/myai/internal/service"
 )
 
 // WebParams describes the OpenCode Web background service.

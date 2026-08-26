@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Carlboms-Data-AB/myai/internal/progress"
+	"github.com/carlbomsdata/myai/internal/progress"
 )
 
 // Endpoint is the Hugging Face host. It can be overridden by the HF_ENDPOINT

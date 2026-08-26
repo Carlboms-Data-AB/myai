@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Carlboms-Data-AB/myai/internal/config"
+	"github.com/carlbomsdata/myai/internal/config"
 )
 
 // Selection is the set of release assets to download for one platform and

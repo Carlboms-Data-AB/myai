@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Carlboms-Data-AB/myai/internal/app"
-	"github.com/Carlboms-Data-AB/myai/internal/paths"
-	"github.com/Carlboms-Data-AB/myai/internal/platform"
-	"github.com/Carlboms-Data-AB/myai/internal/run"
-	"github.com/Carlboms-Data-AB/myai/internal/ui"
+	"github.com/carlbomsdata/myai/internal/app"
+	"github.com/carlbomsdata/myai/internal/paths"
+	"github.com/carlbomsdata/myai/internal/platform"
+	"github.com/carlbomsdata/myai/internal/run"
+	"github.com/carlbomsdata/myai/internal/ui"
 )
 
 // harness builds a CLI wired to a temporary machine with faked commands.

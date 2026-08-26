@@ -6,9 +6,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/Carlboms-Data-AB/myai/internal/backend"
-	"github.com/Carlboms-Data-AB/myai/internal/opencode"
-	"github.com/Carlboms-Data-AB/myai/internal/service"
+	"github.com/carlbomsdata/myai/internal/backend"
+	"github.com/carlbomsdata/myai/internal/opencode"
+	"github.com/carlbomsdata/myai/internal/service"
 )
 
 // Apply writes every generated file from the current configuration and

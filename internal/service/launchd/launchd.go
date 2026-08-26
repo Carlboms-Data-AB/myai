@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Carlboms-Data-AB/myai/internal/run"
-	"github.com/Carlboms-Data-AB/myai/internal/service"
+	"github.com/carlbomsdata/myai/internal/run"
+	"github.com/carlbomsdata/myai/internal/service"
 )
 
 // Manager controls LaunchAgents.

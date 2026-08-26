@@ -13,7 +13,7 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/Carlboms-Data-AB/myai/internal/platform"
+	"github.com/carlbomsdata/myai/internal/platform"
 )
 
 // Console renders to a terminal. It satisfies both progress.Reporter and

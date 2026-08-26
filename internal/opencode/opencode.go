@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Carlboms-Data-AB/myai/internal/run"
+	"github.com/carlbomsdata/myai/internal/run"
 )
 
 // Executable is the OpenCode command name.

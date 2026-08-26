@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Carlboms-Data-AB/myai/internal/platform"
-	"github.com/Carlboms-Data-AB/myai/internal/service"
+	"github.com/carlbomsdata/myai/internal/platform"
+	"github.com/carlbomsdata/myai/internal/service"
 )
 
 // UninstallMode says how much to remove. Models are large and expensive to

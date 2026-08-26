@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Carlboms-Data-AB/myai/internal/config"
+	"github.com/carlbomsdata/myai/internal/config"
 )
 
 // realAssets is the asset list of an actual llama.cpp build release.

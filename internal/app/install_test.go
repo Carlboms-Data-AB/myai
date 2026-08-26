@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Carlboms-Data-AB/myai/internal/config"
-	"github.com/Carlboms-Data-AB/myai/internal/secrets"
+	"github.com/carlbomsdata/myai/internal/config"
+	"github.com/carlbomsdata/myai/internal/secrets"
 )
 
 // writeLegacyInstall recreates what the Bash prototype leaves on a Mac.

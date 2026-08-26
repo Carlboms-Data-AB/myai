@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Carlboms-Data-AB/myai/internal/opencode"
-	"github.com/Carlboms-Data-AB/myai/internal/service"
+	"github.com/carlbomsdata/myai/internal/opencode"
+	"github.com/carlbomsdata/myai/internal/service"
 )
 
 // Check is the outcome of one verification.

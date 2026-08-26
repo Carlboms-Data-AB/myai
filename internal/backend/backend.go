@@ -8,11 +8,11 @@ import (
 	"context"
 	"strconv"
 
-	"github.com/Carlboms-Data-AB/myai/internal/catalog"
-	"github.com/Carlboms-Data-AB/myai/internal/config"
-	"github.com/Carlboms-Data-AB/myai/internal/models"
-	"github.com/Carlboms-Data-AB/myai/internal/progress"
-	"github.com/Carlboms-Data-AB/myai/internal/service"
+	"github.com/carlbomsdata/myai/internal/catalog"
+	"github.com/carlbomsdata/myai/internal/config"
+	"github.com/carlbomsdata/myai/internal/models"
+	"github.com/carlbomsdata/myai/internal/progress"
+	"github.com/carlbomsdata/myai/internal/service"
 )
 
 // Info describes an installed backend.

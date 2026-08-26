@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Carlboms-Data-AB/myai/internal/app"
-	"github.com/Carlboms-Data-AB/myai/internal/config"
-	"github.com/Carlboms-Data-AB/myai/internal/platform"
-	"github.com/Carlboms-Data-AB/myai/internal/ui"
+	"github.com/carlbomsdata/myai/internal/app"
+	"github.com/carlbomsdata/myai/internal/config"
+	"github.com/carlbomsdata/myai/internal/platform"
+	"github.com/carlbomsdata/myai/internal/ui"
 )
 
 // errQuit ends the interactive session.

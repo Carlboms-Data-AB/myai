@@ -5,12 +5,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Carlboms-Data-AB/myai/internal/backend"
-	"github.com/Carlboms-Data-AB/myai/internal/opencode"
-	"github.com/Carlboms-Data-AB/myai/internal/platform"
-	"github.com/Carlboms-Data-AB/myai/internal/run"
-	"github.com/Carlboms-Data-AB/myai/internal/secrets"
-	"github.com/Carlboms-Data-AB/myai/internal/service"
+	"github.com/carlbomsdata/myai/internal/backend"
+	"github.com/carlbomsdata/myai/internal/opencode"
+	"github.com/carlbomsdata/myai/internal/platform"
+	"github.com/carlbomsdata/myai/internal/run"
+	"github.com/carlbomsdata/myai/internal/secrets"
+	"github.com/carlbomsdata/myai/internal/service"
 )
 
 // Status is everything MyAI can report about the current machine. It is data

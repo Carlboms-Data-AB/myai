@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Carlboms-Data-AB/myai/internal/catalog"
-	"github.com/Carlboms-Data-AB/myai/internal/hf"
-	"github.com/Carlboms-Data-AB/myai/internal/progress"
+	"github.com/carlbomsdata/myai/internal/catalog"
+	"github.com/carlbomsdata/myai/internal/hf"
+	"github.com/carlbomsdata/myai/internal/progress"
 )
 
 // GGUFStore manages GGUF files for the llama.cpp backend. MyAI owns this

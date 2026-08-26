@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/Carlboms-Data-AB/myai/internal/service"
+	"github.com/carlbomsdata/myai/internal/service"
 )
 
 // TestPlistPassesRealPlutil validates the generated agent with the same tool

@@ -16,15 +16,15 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Carlboms-Data-AB/myai/internal/archive"
-	"github.com/Carlboms-Data-AB/myai/internal/backend"
-	"github.com/Carlboms-Data-AB/myai/internal/catalog"
-	"github.com/Carlboms-Data-AB/myai/internal/config"
-	"github.com/Carlboms-Data-AB/myai/internal/fetch"
-	"github.com/Carlboms-Data-AB/myai/internal/models"
-	"github.com/Carlboms-Data-AB/myai/internal/progress"
-	"github.com/Carlboms-Data-AB/myai/internal/run"
-	"github.com/Carlboms-Data-AB/myai/internal/service"
+	"github.com/carlbomsdata/myai/internal/archive"
+	"github.com/carlbomsdata/myai/internal/backend"
+	"github.com/carlbomsdata/myai/internal/catalog"
+	"github.com/carlbomsdata/myai/internal/config"
+	"github.com/carlbomsdata/myai/internal/fetch"
+	"github.com/carlbomsdata/myai/internal/models"
+	"github.com/carlbomsdata/myai/internal/progress"
+	"github.com/carlbomsdata/myai/internal/run"
+	"github.com/carlbomsdata/myai/internal/service"
 )
 
 // Executable is the llama.cpp server command name.

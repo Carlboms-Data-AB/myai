@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Carlboms-Data-AB/myai/internal/catalog"
-	"github.com/Carlboms-Data-AB/myai/internal/run"
+	"github.com/carlbomsdata/myai/internal/catalog"
+	"github.com/carlbomsdata/myai/internal/run"
 )
 
 func mustResolve(t *testing.T, id, goos, goarch string) catalog.Resolved {

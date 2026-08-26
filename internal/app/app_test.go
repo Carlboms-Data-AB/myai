@@ -12,12 +12,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Carlboms-Data-AB/myai/internal/config"
-	"github.com/Carlboms-Data-AB/myai/internal/paths"
-	"github.com/Carlboms-Data-AB/myai/internal/platform"
-	"github.com/Carlboms-Data-AB/myai/internal/progress"
-	"github.com/Carlboms-Data-AB/myai/internal/run"
-	"github.com/Carlboms-Data-AB/myai/internal/service"
+	"github.com/carlbomsdata/myai/internal/config"
+	"github.com/carlbomsdata/myai/internal/paths"
+	"github.com/carlbomsdata/myai/internal/platform"
+	"github.com/carlbomsdata/myai/internal/progress"
+	"github.com/carlbomsdata/myai/internal/run"
+	"github.com/carlbomsdata/myai/internal/service"
 )
 
 // newTestApp builds an App rooted entirely inside a temporary directory, with

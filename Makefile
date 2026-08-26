@@ -1,6 +1,6 @@
 BINARY := myai
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-LDFLAGS := -s -w -X github.com/Carlboms-Data-AB/myai/internal/app.Version=$(VERSION)
+LDFLAGS := -s -w -X github.com/carlbomsdata/myai/internal/app.Version=$(VERSION)
 
 .PHONY: build test vet fmt install dist clean
 

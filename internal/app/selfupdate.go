@@ -14,11 +14,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Carlboms-Data-AB/myai/internal/fetch"
+	"github.com/carlbomsdata/myai/internal/fetch"
 )
 
 // releaseAPI is where MyAI looks for its own releases.
-const releaseAPI = "https://api.github.com/repos/Carlboms-Data-AB/myai/releases/latest"
+const releaseAPI = "https://api.github.com/repos/carlbomsdata/myai/releases/latest"
 
 // UpdateResult describes what a self-update did.
 type UpdateResult struct {

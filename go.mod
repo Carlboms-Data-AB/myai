@@ -1,4 +1,4 @@
-module github.com/Carlboms-Data-AB/myai
+module github.com/carlbomsdata/myai
 
 go 1.23
 

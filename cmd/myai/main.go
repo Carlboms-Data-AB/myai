@@ -9,7 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/Carlboms-Data-AB/myai/internal/cli"
+	"github.com/carlbomsdata/myai/internal/cli"
 )
 
 func main() {

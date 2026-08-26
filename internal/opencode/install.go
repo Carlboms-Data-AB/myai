@@ -8,9 +8,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Carlboms-Data-AB/myai/internal/archive"
-	"github.com/Carlboms-Data-AB/myai/internal/fetch"
-	"github.com/Carlboms-Data-AB/myai/internal/progress"
+	"github.com/carlbomsdata/myai/internal/archive"
+	"github.com/carlbomsdata/myai/internal/fetch"
+	"github.com/carlbomsdata/myai/internal/progress"
 )
 
 // releaseURL is the OpenCode release feed.
