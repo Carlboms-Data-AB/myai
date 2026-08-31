@@ -128,7 +128,7 @@ local coding agent  ·  darwin/arm64
 
 Choose **OpenCode** to start the terminal interface in the current directory.
 
-Everything in the menu is also a command:
+The work the menu does is also available as commands:
 
 ```bash
 myai status             # what is installed and running
@@ -137,7 +137,12 @@ myai web                # Web UI address, username and password
 myai opencode           # launch OpenCode here
 myai models             # list models
 myai restart            # restart the background services
+myai start | stop       # start or stop them without reinstalling
 ```
+
+`myai help` lists the rest. Settings go the other way: everything under
+**Runtime** and **Configure** is menu-only, so changing the context size, a
+port, the Web UI or the password is done there rather than on the command line.
 
 `myai status` reports the MyAI and OpenCode versions, the inference backend,
 the active model and where it stands in memory, the keep-in-RAM setting, the
@@ -152,9 +157,17 @@ service state rather than claiming more precision than it can get for free.
 `myai test` checks the real thing rather than the presence of files. It
 verifies that the backend is installed, that the service is running, that the
 API answers, that the active model is downloaded and actually being served,
-that a small inference completes correctly, that OpenCode is installed, that
-the managed configuration is still pinned to the local model, and that
-OpenCode Web responds to an authenticated request.
+that a small inference completes, that OpenCode is not told more context than
+the server will serve, that OpenCode is installed, that the managed
+configuration is still pinned to the local model, and that OpenCode Web
+responds to an authenticated request. Browser automation is checked when it is
+switched on. Checks that do not apply are reported as skipped rather than
+quietly passed.
+
+The inference check asks the model to echo an unusual phrase. A small or
+reasoning model may spend its budget thinking and never echo it; that still
+proves the path from HTTP request to generated tokens, so it passes with the
+nuance reported rather than failing.
 
 ## Model management
 
@@ -194,23 +207,34 @@ Models are stored in the place the backend expects:
 
 | Platform | Location |
 |---|---|
-| macOS | `~/.mlx-serve/models`, shared with mlx-serve |
+| macOS, mlx-serve | `~/.mlx-serve/models`, shared with mlx-serve |
+| macOS, llama.cpp | `~/.local/share/myai/models` |
 | Linux | `~/.local/share/myai/models` |
 | Windows | `%LOCALAPPDATA%\MyAI\data\models` |
+
+MLX checkpoints go where mlx-serve keeps them, so the MLX Core app sees the
+same downloads. GGUF files MyAI fetches itself live in its own data directory,
+which is why overriding the backend on a Mac also changes where models land.
 
 ## Platform support
 
 | Platform | Backend | Services | Notes |
 |---|---|---|---|
 | macOS Apple Silicon | mlx-serve, Metal | launchd LaunchAgents | mlx-serve comes from Homebrew |
-| Windows x64 | llama.cpp, Vulkan or CUDA or CPU | NSSM | fully native, no WSL |
-| Windows ARM64 | llama.cpp, CPU or CUDA | NSSM | NSSM itself is x64 and runs under emulation |
+| Windows x64 | llama.cpp, Vulkan or CUDA or CPU | NSSM | fully native, no WSL; NSSM has to be installed first |
+| Windows ARM64 | llama.cpp, CUDA or CPU | NSSM | NSSM itself is x64 and runs under emulation |
 | Linux x64 | llama.cpp, Vulkan or CPU | systemd user units | |
-| Linux ARM64 | llama.cpp, CPU | systemd user units | |
+| Linux ARM64 | llama.cpp, Vulkan or CPU | systemd user units | |
 
 MyAI installs the official prebuilt llama.cpp and OpenCode binaries for your
 platform. On x64 machines it picks a Vulkan build by default, checks that it
-actually runs, and falls back to the portable CPU build if it does not.
+actually runs, and falls back to the portable CPU build if it does not. On
+ARM64 it defaults to CPU, and anything else is a deliberate choice under
+**Runtime**. CUDA is Windows-only, because llama.cpp publishes no Linux CUDA
+archive.
+
+NSSM is the one dependency MyAI does not install for you; see
+[Installation](#installation).
 
 Intel Macs are not supported: MLX needs Apple Silicon.
 
@@ -220,10 +244,10 @@ then resolves the active model to the GGUF artifact rather than the MLX one.
 
 ## Installation
 
-Every release ships a single binary with no runtime dependencies. Pick the one
-for your machine from the
+Every release ships a single binary. Pick the one for your machine from the
 [releases page](https://github.com/carlbomsdata/myai/releases), or use the
-commands below.
+commands below. On macOS and Linux it needs nothing else; on Windows it needs
+NSSM, which is covered under the Windows instructions.
 
 **macOS, Apple Silicon**
 
@@ -258,6 +282,17 @@ curl.exe -fsSL -o myai.exe https://github.com/carlbomsdata/myai/releases/latest/
 Use `myai-windows-arm64.exe` on ARM machines. Installing the services needs an
 elevated prompt, because that is what registering a Windows service requires.
 
+Windows also needs [NSSM](https://nssm.cc) on PATH before `myai install`, since
+that is what registers the two background services. MyAI neither installs it
+nor removes it:
+
+```powershell
+winget install NSSM.NSSM
+```
+
+`myai status` and `myai test` work without it; only installing the services
+does not.
+
 Running `status` first is worth the ten seconds. It changes nothing, writes no
 files and tells you what the machine already has, so you can see what an
 install is about to do.
@@ -279,9 +314,13 @@ make build
 
 `myai install` asks which model you want, showing what each is for and how
 much memory it needs, then installs the inference backend, OpenCode, the model
-you chose, the background services and the `myai` command itself, and puts the
-command on your PATH. Pick several if you like; the first becomes the active
-one and you can switch later under **Models**.
+you chose, the background services and the `myai` command itself. Pick several
+if you like; the first becomes the active one and you can switch later under
+**Models**.
+
+On macOS and Linux it also adds its bin directory to your shell profile, so
+`myai` works from any new shell. On Windows it prints the directory to add
+instead, because changing the user PATH is the operator's call.
 
 It is idempotent: anything already present is left alone, and a model you
 already have is never downloaded again.
@@ -397,7 +436,8 @@ On macOS and Linux they run as your own user and start when you log in. On
 Windows, NSSM registers them as native services; MyAI sets them to run as your
 account rather than LocalSystem, which is why installing them asks for your
 Windows password and needs an elevated prompt. The password goes to the
-service manager and is never stored by MyAI.
+service manager and is never stored by MyAI. NSSM has to be on PATH already,
+and MyAI leaves it in place when it uninstalls.
 
 Logs are in `~/.local/state/myai/logs` on macOS and Linux, and in
 `%LOCALAPPDATA%\MyAI\state\logs` on Windows.
@@ -472,8 +512,7 @@ drives a real browser with real signed-in sessions.
 ```text
 MYAI · Uninstall
 
-  1  Uninstall MyAI
-     Keep downloaded models
+  1  Uninstall MyAI, keep downloaded models
   2  Uninstall MyAI and delete models
   3  Delete downloaded models only
   4  Cancel
@@ -509,6 +548,8 @@ anything happens says which case applies to your machine.
 | `cmd/myai` | command entry point |
 | `internal/app` | the core: every operation, with no user interface |
 | `internal/cli`, `internal/ui` | the terminal interface |
+| `internal/config`, `internal/paths` | the settings and where they live on each OS |
+| `internal/secrets` | the generated Web UI credentials |
 | `internal/backend` | mlx-serve and llama.cpp adapters |
 | `internal/service` | launchd, NSSM and systemd adapters |
 | `internal/catalog`, `internal/models` | logical models and the artifacts on disk |
